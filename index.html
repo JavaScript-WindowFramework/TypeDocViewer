@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1"/>
+	<link rel="stylesheet" href="https://javascript-windowframework.github.io/TypeDocViewer/css/JSWindow.css" />
+	<script type="text/javascript" src="https://javascript-windowframework.github.io/TypeDocViewer/js/jsw/Window.js"></script>
+	<script type="text/javascript" src="https://javascript-windowframework.github.io/TypeDocViewer/js/TypeDocViewer.js"></script>
+	<!--
+		TypeDocのJSONデータに「let doc =」を付けて拡張子を変えたファイル
+		こうするとAjaxを使わずにデータを読み込むことが可能
+		<script type="text/javascript" src="https://javascript-windowframework.github.io/TypeDocViewer/doc/document.js"></script>
+	-->
+
+
+	<script>
+		//ページ読み込み時に実行する処理を設定
+		addEventListener("DOMContentLoaded", docMain)
+		//ページ読み込み後に実行される内容
+		function docMain() {
+			let typeDocView = new TypeDocView({frame:false}) //trueにするとフレームウインドウで表示
+			//typeDocView.setSize(640,480)	//サイズ指定
+			typeDocView.setOverlap(true)
+			typeDocView.setMaximize(true)	//最大化(サイズを指定したければコメントアウトすること)
+
+			typeDocView.loadUrl('./doc/document.json')	//TypeDocのJSONデータのURLを指定
+			//typeDocView.load(doc)						//こちらはローカルからでも実行可能
+		}
+	</script>
+	<title>TypeDocViewer</title>
+</head>
+<body>
+</body>
+</html>
