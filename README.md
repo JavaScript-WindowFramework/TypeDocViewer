@@ -1,16 +1,15 @@
 # JSW
-JavaScript用ウインドウフレームワーク
+JavaScript用ウインドウフレームワークのサンプル
 [ドキュメント](https://javascript-windowframework.github.io/JSW/Samples/Document.html)
 
 
-[サンプル](https://javascript-windowframework.github.io/JSW/)
+[動作サンプル](https://javascript-windowframework.github.io/TypeDocViewer/)
 
 ## 作成者
 [空雲](https://croud.jp/)
 
 ## 内容
-JavaScriptによるウインドウフレームワークを作成し、
-ネイティブアプリと同じような感覚でWebシステムを開発することを目指す
+JSWフレームワークを利用したTypeDocViewer
 
 ## ターゲット
 TypeScript+ES5(JavaScript)
