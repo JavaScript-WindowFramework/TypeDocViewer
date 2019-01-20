@@ -9,8 +9,6 @@
 
 ![ScreenShot](ScreenShot/picture01.png)
 
-![hugo.png](https://qiita-image-store.s3.amazonaws.com/0/95804/df507efa-6ea8-ddc9-c65b-0b3ecf116883.png)
-
 ## 作成者
 [空雲](https://croud.jp/)
 
