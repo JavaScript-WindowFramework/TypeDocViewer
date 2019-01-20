@@ -52,7 +52,7 @@ declare namespace JSW {
         /**
          * マウスとタッチイベントの座標取得処理
          * @param  {MouseEvent|TouchEvent} e
-         * @returns Point
+         * @returns {Point} マウスの座標
          */
         static getPos(e: MouseEvent | TouchEvent): Point;
         /**
@@ -909,6 +909,7 @@ declare namespace JSW {
         sortVector: boolean;
         columnWidth: number[];
         columnAutoIndex: number;
+        areaWidth: number;
         /**
          *Creates an instance of ListView.
          * @param {*} [params] ウインドウ作成パラメータ

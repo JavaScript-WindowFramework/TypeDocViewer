@@ -1,15 +1,16 @@
-# JSW
-JavaScript用ウインドウフレームワークのサンプル
-[ドキュメント](https://javascript-windowframework.github.io/JSW/Samples/Document.html)
+# TypeDoc Viewer
 
+[動作サンプルページ](https://javascript-windowframework.github.io/TypeDocViewer/)
 
-[動作サンプル](https://javascript-windowframework.github.io/TypeDocViewer/)
+## 内容
+　JSWフレームワークを利用したTypeDocViewer
+　TypeDoc形式のJSONデータをSPAで表示する
+　[JSW](https://github.com/JavaScript-WindowFramework/JSW)用サンプル
+
 
 ## 作成者
 [空雲](https://croud.jp/)
 
-## 内容
-JSWフレームワークを利用したTypeDocViewer
 
 ## ターゲット
 TypeScript+ES5(JavaScript)

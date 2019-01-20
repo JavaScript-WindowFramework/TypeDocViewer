@@ -1,3 +1,5 @@
+///<reference path="../js/jsw.d.ts"/>
+
 namespace TYPEDOC{
 	/**
 	 *TypeDocのJSON処理用
@@ -348,6 +350,9 @@ class TypeDocView extends JSW.Window{
 		listView.clearItem()
 		if (value.kindString){
 			listView.addItem(['種別',value.kindString])
+		}
+		if (value.defaultValue){
+			listView.addItem(['初期値',value.defaultValue])
 		}
 		if (value.signatures && value.signatures.length){
 			const signature = value.signatures[0]

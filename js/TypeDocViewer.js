@@ -1,3 +1,4 @@
+///<reference path="../js/jsw.d.ts"/>
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -243,6 +244,9 @@ var TypeDocView = /** @class */ (function (_super) {
         listView.clearItem();
         if (value.kindString) {
             listView.addItem(['種別', value.kindString]);
+        }
+        if (value.defaultValue) {
+            listView.addItem(['初期値', value.defaultValue]);
         }
         if (value.signatures && value.signatures.length) {
             var signature = value.signatures[0];

@@ -4,9 +4,7 @@
 		"target": "es5",
 		"module": "es2015",
 		"outDir": "./js/",
-		"rootDir": "./ts/",
-		"declaration": true,
-		"declarationDir":"./@types",
+		"rootDir": "./src/",
 		"lib": [
 			"es2015",
 			"dom"
