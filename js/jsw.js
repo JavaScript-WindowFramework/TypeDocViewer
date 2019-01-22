@@ -1,5 +1,6 @@
 /**
  * JavaScriptWindowフレームワーク用名前空間
+ * namespaceの前に「export」を入れると、モジュールとして利用可能
 */
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
@@ -134,6 +135,7 @@ var JSW;
             if (!Jsw.layoutHandler) {
                 //タイマーによる遅延実行
                 Jsw.layoutHandler = setTimeout(function () {
+                    console.log((new Date()).getTime());
                     var nodes = document.querySelectorAll("[data-type=Window]");
                     var count = nodes.length;
                     for (var i = 0; i < count; i++) {
@@ -144,7 +146,7 @@ var JSW;
                     }
                     Jsw.layoutHandler = null;
                     Jsw.layoutForced = false;
-                }, 0);
+                }, 5);
             }
         };
         Jsw.moveNode = null;

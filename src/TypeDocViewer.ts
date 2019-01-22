@@ -1,4 +1,4 @@
-///<reference path="../js/jsw.d.ts"/>
+
 
 namespace TYPEDOC{
 	/**
