@@ -172,7 +172,7 @@ namespace JSW {
 					}
 					Jsw.layoutHandler = null
 					Jsw.layoutForced = false
-				}, 1)
+				}, 5)
 			}
 		}
 	}
