@@ -135,7 +135,6 @@ var JSW;
             if (!Jsw.layoutHandler) {
                 //タイマーによる遅延実行
                 Jsw.layoutHandler = setTimeout(function () {
-                    console.log((new Date()).getTime());
                     var nodes = document.querySelectorAll("[data-type=Window]");
                     var count = nodes.length;
                     for (var i = 0; i < count; i++) {
@@ -146,7 +145,7 @@ var JSW;
                     }
                     Jsw.layoutHandler = null;
                     Jsw.layoutForced = false;
-                }, 5);
+                }, 1);
             }
         };
         Jsw.moveNode = null;
