@@ -1,7 +1,3 @@
-/**
- * JavaScriptWindowフレームワーク用名前空間
- * namespaceの前に「export」を入れると、モジュールとして利用可能
-*/
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -17,21 +13,170 @@ var __extends = (this && this.__extends) || (function () {
 })();
 var JSW;
 (function (JSW) {
+    var Adapter = /** @class */ (function () {
+        function Adapter(scriptUrl, keyName) {
+            this.functionSet = [];
+            this.scriptUrl = scriptUrl;
+            this.keyName = keyName || 'Session';
+        }
+        Adapter.prototype.exec = function (v1) {
+            var v2 = [];
+            for (var _i = 1; _i < arguments.length; _i++) {
+                v2[_i - 1] = arguments[_i];
+            }
+            var functionSet;
+            if (Array.isArray(v1)) {
+                var functions = [];
+                for (var _a = 0, _b = v1; _a < _b.length; _a++) {
+                    var func = _b[_a];
+                    functions.push({ name: func[0], params: func.slice(1) });
+                }
+                functionSet = { functions: functions, promise: {}, array: true };
+            }
+            else {
+                functionSet = { functions: [{ name: v1, params: v2 }], promise: {}, array: false };
+            }
+            var promise = new Promise(function (resolve, reject) {
+                functionSet.promise.resolve = resolve;
+                functionSet.promise.reject = reject;
+            });
+            this.functionSet.push(functionSet);
+            this.callSend();
+            return promise;
+        };
+        Adapter.prototype.callSend = function () {
+            var _this = this;
+            if (!this.handle) {
+                this.handle = window.setTimeout(function () { _this.send(); }, 0);
+            }
+        };
+        Adapter.prototype.send = function () {
+            var _this = this;
+            this.handle = null;
+            var globalHash = localStorage.getItem(this.keyName);
+            var sessionHash = sessionStorage.getItem(this.keyName);
+            var functionSet = this.functionSet;
+            this.functionSet = [];
+            var params = {
+                globalHash: globalHash,
+                sessionHash: sessionHash,
+                functions: []
+            };
+            for (var _i = 0, functionSet_1 = functionSet; _i < functionSet_1.length; _i++) {
+                var funcs = functionSet_1[_i];
+                for (var _a = 0, _b = funcs.functions; _a < _b.length; _a++) {
+                    var func = _b[_a];
+                    params.functions.push({ function: func.name, params: func.params });
+                }
+            }
+            this.sendJson(this.scriptUrl + '?cmd=exec', params, function (res) {
+                if (res == null) {
+                    for (var _i = 0, functionSet_2 = functionSet; _i < functionSet_2.length; _i++) {
+                        var funcs = functionSet_2[_i];
+                        console.error('通信エラー');
+                        funcs.promise.reject('通信エラー');
+                    }
+                }
+                else {
+                    if (res.globalHash)
+                        localStorage.setItem(_this.keyName, res.globalHash);
+                    if (res.sessionHash)
+                        sessionStorage.setItem(_this.keyName, res.sessionHash);
+                    var results = res.results;
+                    var index = 0;
+                    for (var _a = 0, functionSet_3 = functionSet; _a < functionSet_3.length; _a++) {
+                        var funcs = functionSet_3[_a];
+                        var length_1 = funcs.functions.length;
+                        if (funcs.array) {
+                            var values = [];
+                            for (var i = index; i < length_1; i++) {
+                                if (results[i].error) {
+                                    console.error(results[i].error);
+                                    funcs.promise.reject(results[i].error);
+                                    break;
+                                }
+                                values.push(results[i].value);
+                            }
+                            funcs.promise.resolve(values);
+                        }
+                        else {
+                            var result = results[index];
+                            if (result.error)
+                                console.error(result.error);
+                            else
+                                funcs.promise.resolve(result.value);
+                        }
+                        index += length_1;
+                    }
+                }
+            });
+        };
+        Adapter.prototype.sendJson = function (url, data, proc, headers) {
+            var req = new XMLHttpRequest();
+            //ネイティブでJSON変換が可能かチェック
+            var jsonFlag = false;
+            try {
+                req.responseType = 'json';
+            }
+            catch (e) {
+                jsonFlag = true;
+            }
+            if (proc == null) {
+                req.open('POST', url, false);
+                return JSON.parse(req.responseText);
+            }
+            else {
+                req.onreadystatechange = function () {
+                    if (req.readyState == 4) {
+                        var obj = null;
+                        try {
+                            if (jsonFlag) //JSON変換の仕分け
+                                obj = JSON.parse(req.response);
+                            else
+                                obj = req.response;
+                        }
+                        catch (e) {
+                            proc(null);
+                            return;
+                        }
+                        proc(obj);
+                    }
+                };
+            }
+            req.open('POST', url, true);
+            req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            if (headers) {
+                for (var index in headers) {
+                    req.setRequestHeader(index, sessionStorage.getItem(headers[index]));
+                }
+            }
+            req.send(JSON.stringify(data));
+        };
+        return Adapter;
+    }());
+    JSW.Adapter = Adapter;
+})(JSW || (JSW = {}));
+/**
+ * JavaScriptWindowフレームワーク用名前空間
+ * namespaceの前に「export」を入れると、モジュールとして利用可能
+*/
+var JSW;
+(function (JSW) {
     /**
      * ウインドウ等総合管理クラス
      *
      * @export
      * @class Jsw
      */
-    var Jsw = /** @class */ (function () {
-        function Jsw() {
+    var WindowManager = /** @class */ (function () {
+        function WindowManager() {
         }
         /**
          * マウスとタッチイベントの座標取得処理
          * @param  {MouseEvent|TouchEvent} e
          * @returns {Point} マウスの座標
          */
-        Jsw.getPos = function (e) {
+        WindowManager.getPos = function (e) {
             var p;
             if (e.targetTouches && e.targetTouches.length) {
                 var touch = e.targetTouches[0];
@@ -49,17 +194,17 @@ var JSW;
          * @param {HTMLElement} node
          * @memberof Jsw
          */
-        Jsw.enableMove = function (node) {
+        WindowManager.enableMove = function (node) {
             function mouseDown(e) {
-                if (Jsw.moveNode == null) {
-                    Jsw.moveNode = node;
-                    var p = Jsw.getPos(e);
-                    Jsw.baseX = p.x;
-                    Jsw.baseY = p.y;
-                    Jsw.nodeX = node.offsetLeft;
-                    Jsw.nodeY = node.offsetTop;
-                    Jsw.nodeWidth = node.clientWidth;
-                    Jsw.nodeHeight = node.clientWidth;
+                if (WindowManager.moveNode == null) {
+                    WindowManager.moveNode = node;
+                    var p = WindowManager.getPos(e);
+                    WindowManager.baseX = p.x;
+                    WindowManager.baseY = p.y;
+                    WindowManager.nodeX = node.offsetLeft;
+                    WindowManager.nodeY = node.offsetTop;
+                    WindowManager.nodeWidth = node.clientWidth;
+                    WindowManager.nodeHeight = node.clientWidth;
                     e.preventDefault();
                     return false;
                 }
@@ -76,8 +221,8 @@ var JSW;
          * @param {*} [params] イベント発生時にevent.paramsの形で送られる
          * @memberof Jsw
          */
-        Jsw.callEvent = function (node, ename, params) {
-            node.dispatchEvent(Jsw.createEvent(ename, params));
+        WindowManager.callEvent = function (node, ename, params) {
+            node.dispatchEvent(WindowManager.createEvent(ename, params));
         };
         /**
          *イベントを作成する
@@ -88,7 +233,7 @@ var JSW;
          * @returns {Event} 作成したイベント
          * @memberof Jsw
          */
-        Jsw.createEvent = function (ename, params) {
+        WindowManager.createEvent = function (ename, params) {
             var event;
             if (!!window.MSStream) {
                 event = document.createEvent('CustomEvent');
@@ -109,7 +254,7 @@ var JSW;
          * @returns {HTMLElement} 作成したノード
          * @memberof Jsw
          */
-        Jsw.createElement = function (tagName, params) {
+        WindowManager.createElement = function (tagName, params) {
             var tag = document.createElement(tagName);
             for (var index in params) {
                 var p = params[index];
@@ -130,59 +275,82 @@ var JSW;
          * @param {boolean} flag	true:全Window強制更新 false:更新の必要があるWindowのみ更新
          * @memberof Jsw
          */
-        Jsw.layout = function (flag) {
-            Jsw.layoutForced = Jsw.layoutForced || flag;
-            if (!Jsw.layoutHandler) {
+        WindowManager.layout = function (flag) {
+            WindowManager.layoutForced = WindowManager.layoutForced || flag;
+            if (!WindowManager.layoutHandler) {
                 //タイマーによる遅延実行
-                Jsw.layoutHandler = setTimeout(function () {
-                    var nodes = document.querySelectorAll("[data-type=Window]");
+                WindowManager.layoutHandler = setTimeout(function () {
+                    WindowManager.layoutHandler = null;
+                    var nodes = document.querySelectorAll("[data-jsw=Window]");
                     var count = nodes.length;
                     for (var i = 0; i < count; i++) {
                         var node = nodes[i];
                         if (!node.Jsw.getParent())
-                            node.Jsw.onMeasure(Jsw.layoutForced);
-                        node.Jsw.onLayout(Jsw.layoutForced);
+                            node.Jsw.onMeasure(WindowManager.layoutForced);
+                        node.Jsw.onLayout(WindowManager.layoutForced);
                     }
-                    Jsw.layoutHandler = null;
-                    Jsw.layoutForced = false;
-                }, 5);
+                    WindowManager.layoutForced = false;
+                }, 0);
             }
         };
-        Jsw.moveNode = null;
-        Jsw.frame = null;
-        return Jsw;
+        WindowManager.moveNode = null;
+        WindowManager.frame = null;
+        return WindowManager;
     }());
-    JSW.Jsw = Jsw;
-    //各サイズ
-    var FRAME_SIZE = 10; //フレーム枠のサイズ
-    var TITLE_SIZE = 24; //タイトルバーのサイズ
+    JSW.WindowManager = WindowManager;
     //各イベント設定
-    addEventListener("resize", function () { Jsw.layout(true); });
+    addEventListener("resize", function () { WindowManager.layout(true); });
     addEventListener("mouseup", mouseUp, false);
     addEventListener("touchend", mouseUp, { passive: false });
     addEventListener("mousemove", mouseMove, false);
     addEventListener("touchmove", mouseMove, { passive: false });
+    addEventListener("touchstart", mouseDown, { passive: false });
+    addEventListener("mousedown", mouseDown, false);
+    function mouseDown(e) {
+        var node = e.target;
+        do {
+            if (node.dataset && node.dataset.jsw === "Window") {
+                return;
+            }
+        } while (node = node.parentNode);
+        deactive();
+        return false;
+    }
+    function deactive() {
+        var activeWindows = document.querySelectorAll('[data-jsw="Window"][data-jsw-active="true"]');
+        for (var i = 0, l = activeWindows.length; i < l; i++) {
+            var w = activeWindows[i];
+            w.dataset.jswActive = 'false';
+            w.Jsw.callEvent('active', { active: false });
+        }
+    }
     //マウスが離された場合に選択をリセット
     function mouseUp() {
-        Jsw.moveNode = null;
-        Jsw.frame = null;
+        WindowManager.moveNode = null;
+        WindowManager.frame = null;
     }
     //マウス移動時の処理
     function mouseMove(e) {
-        if (Jsw.moveNode) {
-            var node = Jsw.moveNode; //移動中ノード
-            var p = Jsw.getPos(e); //座標の取得
+        if (WindowManager.moveNode) {
+            var node = WindowManager.moveNode; //移動中ノード
+            var p = WindowManager.getPos(e); //座標の取得
             var params = {
-                nodePoint: { x: Jsw.nodeX, y: Jsw.nodeY },
-                basePoint: { x: Jsw.baseX, y: Jsw.baseY },
+                event: e,
+                nodePoint: { x: WindowManager.nodeX, y: WindowManager.nodeY },
+                basePoint: { x: WindowManager.baseX, y: WindowManager.baseY },
                 nowPoint: { x: p.x, y: p.y },
                 nodeSize: { width: node.clientWidth, height: node.clientHeight }
             };
-            Jsw.callEvent(node, 'move', params);
-            //e.preventDefault()
-            return false;
+            WindowManager.callEvent(node, 'move', params);
         }
     }
+})(JSW || (JSW = {}));
+/// <reference path="./jsw.ts" />
+var JSW;
+(function (JSW) {
+    //各サイズ
+    var FRAME_SIZE = 10; //フレーム枠のサイズ
+    var TITLE_SIZE = 24; //タイトルバーのサイズ
     /**
      *ウインドウ基本クラス
      *
@@ -200,6 +368,8 @@ var JSW;
          * @memberof Window
          */
         function Window(params) {
+            var _this = this;
+            this.Events = new Map();
             this.JData = {
                 x: 0,
                 y: 0,
@@ -223,15 +393,26 @@ var JSW;
                 margin: { x1: 0, y1: 0, x2: 0, y2: 0 },
                 padding: { x1: 0, y1: 0, x2: 0, y2: 0 },
                 moveable: false,
+                reshow: true,
+                noActive: false,
+                animation: {},
+                animationEnable: true,
+                autoSizeNode: null
             };
             //ウインドウ用ノードの作成
             var hNode = document.createElement('DIV');
             hNode.Jsw = this;
-            this.JData.clientArea = hNode;
             this.hNode = hNode;
-            hNode.dataset.type = "Window";
+            hNode.dataset.jsw = "Window";
             //位置を絶対位置指定
             hNode.style.position = 'absolute';
+            hNode.style.visibility = 'hidden';
+            //クライアント領域を作成
+            var client = document.createElement('div');
+            this.JData.clientArea = client;
+            client.dataset.jswType = 'client';
+            hNode.appendChild(client);
+            //パラメータに従いウインドウの作成
             if (params) {
                 if (params.frame) {
                     this.addFrame(params.title == null ? true : params.title);
@@ -239,6 +420,12 @@ var JSW;
                         this.setOrderLayer(10);
                     if (params.overlap == null)
                         this.setOverlap(true);
+                    this.JData.animation['show'] = 'JSWFrameShow 0.5s ease 0s 1 normal';
+                    this.JData.animation['close'] = 'JSWclose 0.2s ease 0s 1 forwards';
+                    this.JData.animation['maximize'] = 'JSWmaximize 0.2s ease 0s 1 forwards';
+                    this.JData.animation['minimize'] = 'JSWminimize 0.2s ease 0s 1 forwards';
+                    this.JData.animation['maxrestore'] = 'JSWmaxrestore 0.2s ease 0s 1 forwards';
+                    this.JData.animation['restore'] = 'JSWrestore 0.2s ease 0s 1 forwards';
                 }
                 if (params.layer) {
                     this.setOrderLayer(params.layer);
@@ -247,6 +434,15 @@ var JSW;
                     this.setOverlap(params.overlap);
                 }
             }
+            hNode.addEventListener("animationend", function () {
+                _this.layout();
+            });
+            // hNode.addEventListener("animationiteration", () => {
+            // 	this.layout()
+            // });
+            // hNode.addEventListener("animationstart", () => {
+            // 	this.layout()
+            // });
             //移動に備えて、必要な情報を収集
             hNode.addEventListener("touchstart", this.onMouseDown.bind(this), { passive: false });
             hNode.addEventListener("mousedown", this.onMouseDown.bind(this));
@@ -259,6 +455,8 @@ var JSW;
             hNode.addEventListener("JSWrestore", this.setMinimize.bind(this, false));
             //ノードを本文へ追加
             document.body.appendChild(hNode);
+            //表示
+            this.show(true);
             //更新要求
             this.layout();
             //新規ウインドウをフォアグラウンドにする
@@ -267,78 +465,83 @@ var JSW;
         Window.prototype.setOverlap = function (flag) {
             this.hNode.style.position = flag ? 'fixed' : 'absolute';
         };
+        Window.prototype.setJswStyle = function (style) {
+            this.getClient().dataset.jswStyle = style;
+        };
+        Window.prototype.getJswStyle = function () {
+            return this.getNode().dataset.jswStyle;
+        };
         //フレーム追加処理
         Window.prototype.addFrame = function (titleFlag) {
-            this.hNode.dataset.style = 'frame';
+            this.hNode.dataset.jswType = 'Frame';
             //タイトルの設定
             this.JData.titleSize = titleFlag ? TITLE_SIZE : 0;
             this.hNode.style.minHeight = this.JData.titleSize + "px";
             //各パーツのスタイル設定
             var frameStyles = [
-                ["frame", "cursor:n-resize; left:0px;top:-{0}px;right:0px;height:{0}px;"],
-                ["frame", "cursor:e-resize; top:0px;right:-{0}px;bottom:0px;width:{0}px;"],
-                ["frame", "cursor:s-resize; left:0px;right:0px;height:{0}px;bottom:-{0}px;"],
-                ["frame", "cursor:w-resize; top:0px;left:-{0}px;bottom:0px;width:{0}px;"],
-                ["frame", "cursor:nw-resize;left:-{0}px;top:-{0}px;width:{0}px;height:{0}px;"],
-                ["frame", "cursor:ne-resize;right:-{0}px;top:-{0}px;width:{0}px;height:{0}px;"],
-                ["frame", "cursor:sw-resize;left:-{0}px;bottom:-{0}px;width:{0}px;height:{0}px;"],
-                ["frame", "cursor:se-resize;right:-{0}px;bottom:-{0}px;width:{0}px;height:{0}px;"],
-                ["title", "left:0px;top:0px;right:0px;height:{1}px"],
-                ["client", "left:0px;top:{1}px;right:0px;bottom:0px"],
+                ["border", "cursor:n-resize; left:0px;top:-{0}px;right:0px;height:{0}px;"],
+                ["border", "cursor:e-resize; top:0px;right:-{0}px;bottom:0px;width:{0}px;"],
+                ["border", "cursor:s-resize; left:0px;right:0px;height:{0}px;bottom:-{0}px;"],
+                ["border", "cursor:w-resize; top:0px;left:-{0}px;bottom:0px;width:{0}px;"],
+                ["border", "cursor:nw-resize;left:-{0}px;top:-{0}px;width:{0}px;height:{0}px;"],
+                ["border", "cursor:ne-resize;right:-{0}px;top:-{0}px;width:{0}px;height:{0}px;"],
+                ["border", "cursor:sw-resize;left:-{0}px;bottom:-{0}px;width:{0}px;height:{0}px;"],
+                ["border", "cursor:se-resize;right:-{0}px;bottom:-{0}px;width:{0}px;height:{0}px;"],
+                ["title", "left:0px;top:0px;right:0px;height:{1}px"] //タイトル
             ];
             //フレームクリックイベントの処理
-            function onFrame(e) {
-                if (Jsw.frame == null)
-                    Jsw.frame = this.dataset.index;
+            function onFrame() {
+                if (JSW.WindowManager.frame == null)
+                    JSW.WindowManager.frame = this.dataset.index;
                 //EDGEはここでイベントを止めないとテキスト選択が入る
-                if (Jsw.frame < 9)
-                    if (e.preventDefault)
-                        e.preventDefault();
-                    else
-                        e.returnValue = false;
+                //if (WindowManager.frame < 9)
+                //	if (e.preventDefault) e.preventDefault(); else e.returnValue = false
             }
             //フレームとタイトル、クライアント領域の作成
             for (var i = 0; i < frameStyles.length; i++) {
                 var frame = document.createElement('div');
                 frame.style.cssText = frameStyles[i][1].replace(/\{0\}/g, FRAME_SIZE.toString()).replace(/\{1\}/g, this.JData.titleSize.toString());
                 frame.dataset.index = i.toString();
-                frame.dataset.type = frameStyles[i][0];
+                frame.dataset.jswType = frameStyles[i][0];
                 this.hNode.appendChild(frame);
                 frame.addEventListener("touchstart", onFrame, { passive: false });
-                frame.addEventListener("touchend", function () { Jsw.frame = null; }, { passive: false });
+                frame.addEventListener("touchend", function () { JSW.WindowManager.frame = null; }, { passive: false });
                 frame.addEventListener("mousedown", onFrame, false);
-                frame.addEventListener("mouseup", function () { Jsw.frame = null; }, false);
+                frame.addEventListener("mouseup", function () { JSW.WindowManager.frame = null; }, false);
             }
+            this.JData.frameSize = 1;
+            this.getClient().style.top = this.JData.titleSize + 'px';
             var node = this.hNode;
             //タイトルバーの作成
-            var title = node.childNodes[8];
-            var titleText = Jsw.createElement("div", { "dataset": { type: "text" } });
+            var title = node.childNodes[9];
+            var titleText = JSW.WindowManager.createElement("div", { "dataset": { jswType: "text" } });
             title.appendChild(titleText);
             //アイコンの作成
             var icons = ["min", "max", "close"];
             for (var index in icons) {
-                var icon = Jsw.createElement("div", { style: { "width": this.JData.titleSize + "px", "height": this.JData.titleSize + "px" }, "dataset": { type: "icon", kind: icons[index] } });
+                var icon = JSW.WindowManager.createElement("div", { style: { "width": this.JData.titleSize + "px", "height": this.JData.titleSize + "px" }, "dataset": { jswType: "icon", jswKind: icons[index] } });
                 title.appendChild(icon);
                 icon.addEventListener("click", function () {
-                    Jsw.callEvent(node, "JSW" + this.dataset.kind);
+                    JSW.WindowManager.callEvent(node, "JSW" + this.dataset.jswKind);
                 });
             }
-            //クライアント領域の取得を書き換える
-            this.JData.clientArea = this.hNode.childNodes[9];
         };
         Window.prototype.onMouseDown = function (e) {
-            if (Jsw.moveNode == null) {
+            if (JSW.WindowManager.moveNode == null) {
                 this.foreground();
-                Jsw.moveNode = this.hNode;
-                var p = Jsw.getPos(e);
-                Jsw.baseX = p.x;
-                Jsw.baseY = p.y;
-                Jsw.nodeX = this.getPosX();
-                Jsw.nodeY = this.getPosY();
-                Jsw.nodeWidth = this.getWidth();
-                Jsw.nodeHeight = this.getHeight();
-                //e.preventDefault()
-                //return false
+                JSW.WindowManager.moveNode = this.hNode;
+                var p = JSW.WindowManager.getPos(e);
+                JSW.WindowManager.baseX = p.x;
+                JSW.WindowManager.baseY = p.y;
+                JSW.WindowManager.nodeX = this.getPosX();
+                JSW.WindowManager.nodeY = this.getPosY();
+                JSW.WindowManager.nodeWidth = this.getWidth();
+                JSW.WindowManager.nodeHeight = this.getHeight();
+                e.stopPropagation();
+                return false;
+            }
+            else {
+                e.preventDefault();
             }
         };
         Window.prototype.onMouseMove = function (e) {
@@ -348,41 +551,41 @@ var JSW;
             var width = this.getWidth();
             var height = this.getHeight();
             //選択されている場所によって挙動を変える
-            var frameIndex = parseInt(Jsw.frame);
+            var frameIndex = parseInt(JSW.WindowManager.frame);
             switch (frameIndex) {
                 case 0: //上
                     y = p.nodePoint.y + p.nowPoint.y - p.basePoint.y;
-                    height = Jsw.nodeHeight - (p.nowPoint.y - p.basePoint.y);
+                    height = JSW.WindowManager.nodeHeight - (p.nowPoint.y - p.basePoint.y);
                     break;
                 case 1: //右
-                    width = Jsw.nodeWidth + (p.nowPoint.x - p.basePoint.x);
+                    width = JSW.WindowManager.nodeWidth + (p.nowPoint.x - p.basePoint.x);
                     break;
                 case 2: //下
-                    height = Jsw.nodeHeight + (p.nowPoint.y - p.basePoint.y);
+                    height = JSW.WindowManager.nodeHeight + (p.nowPoint.y - p.basePoint.y);
                     break;
                 case 3: //左
                     x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
-                    width = Jsw.nodeWidth - (p.nowPoint.x - p.basePoint.x);
+                    width = JSW.WindowManager.nodeWidth - (p.nowPoint.x - p.basePoint.x);
                     break;
                 case 4: //左上
                     x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
                     y = p.nodePoint.y + p.nowPoint.y - p.basePoint.y;
-                    width = Jsw.nodeWidth - (p.nowPoint.x - p.basePoint.x);
-                    height = Jsw.nodeHeight - (p.nowPoint.y - p.basePoint.y);
+                    width = JSW.WindowManager.nodeWidth - (p.nowPoint.x - p.basePoint.x);
+                    height = JSW.WindowManager.nodeHeight - (p.nowPoint.y - p.basePoint.y);
                     break;
                 case 5: //右上
                     y = p.nodePoint.y + p.nowPoint.y - p.basePoint.y;
-                    width = Jsw.nodeWidth + (p.nowPoint.x - p.basePoint.x);
-                    height = Jsw.nodeHeight - (p.nowPoint.y - p.basePoint.y);
+                    width = JSW.WindowManager.nodeWidth + (p.nowPoint.x - p.basePoint.x);
+                    height = JSW.WindowManager.nodeHeight - (p.nowPoint.y - p.basePoint.y);
                     break;
                 case 6: //左下
                     x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
-                    width = Jsw.nodeWidth - (p.nowPoint.x - p.basePoint.x);
-                    height = Jsw.nodeHeight + (p.nowPoint.y - p.basePoint.y);
+                    width = JSW.WindowManager.nodeWidth - (p.nowPoint.x - p.basePoint.x);
+                    height = JSW.WindowManager.nodeHeight + (p.nowPoint.y - p.basePoint.y);
                     break;
                 case 7: //右下
-                    width = Jsw.nodeWidth + (p.nowPoint.x - p.basePoint.x);
-                    height = Jsw.nodeHeight + (p.nowPoint.y - p.basePoint.y);
+                    width = JSW.WindowManager.nodeWidth + (p.nowPoint.x - p.basePoint.x);
+                    height = JSW.WindowManager.nodeHeight + (p.nowPoint.y - p.basePoint.y);
                     break;
                 default: //クライアント領域
                     if (!this.JData.moveable)
@@ -396,22 +599,54 @@ var JSW;
             this.setPos(x, y);
             this.setSize(width, height);
             //移動フレーム処理時はイベントを止める
-            if (frameIndex < 9)
-                if (e.preventDefault)
-                    e.preventDefault();
-                else
-                    e.returnValue = false;
+            if (frameIndex < 9 || this.JData.moveable) {
+                p.event.preventDefault();
+                window.getSelection().removeAllRanges();
+            }
         };
         /**
          *イベントの受け取り
          *
          * @param {string} type イベントタイプ
          * @param {*} listener コールバックリスナー
-         * @param {*} [options] オプション
          * @memberof Window
          */
-        Window.prototype.addEventListener = function (type, listener, options) {
-            this.hNode.addEventListener(type, listener, options);
+        Window.prototype.addEventListener = function (type, listener) {
+            var eventData = this.Events.get(type);
+            if (!eventData) {
+                eventData = [];
+                this.Events.set(type, eventData);
+            }
+            for (var _i = 0, eventData_1 = eventData; _i < eventData_1.length; _i++) {
+                var ev = eventData_1[_i];
+                if (String(ev) === String(listener))
+                    return;
+            }
+            eventData.push(listener);
+        };
+        /**
+         *イベントの削除
+         *
+         * @template K
+         * @param {(K | string)} type イベントタイプ
+         * @param {(this: Window, ev: WINDOW_EVENT_MAP[K]) => any} listener コールバックリスナー
+         * @memberof Window
+         */
+        Window.prototype.removeEventListener = function (type, listener) {
+            if (listener == null) {
+                this.Events.delete(type);
+                return;
+            }
+            var eventData = this.Events.get(type);
+            if (!eventData) {
+                eventData = [];
+                this.Events.set(type, eventData);
+            }
+            for (var index in eventData) {
+                if (String(eventData[index]) === String(listener)) {
+                    eventData.splice(parseInt(index), 1);
+                }
+            }
         };
         /**
          *イベントの要求
@@ -421,7 +656,13 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.callEvent = function (type, params) {
-            Jsw.callEvent(this.hNode, type, params);
+            var eventData = this.Events.get(type);
+            if (eventData) {
+                for (var _i = 0, eventData_2 = eventData; _i < eventData_2.length; _i++) {
+                    var ev = eventData_2[_i];
+                    ev(params);
+                }
+            }
         };
         /**
          *ウインドウのノードを得る
@@ -443,6 +684,9 @@ var JSW;
             this.JData.x = this.JData.x + parseInt(x);
             this.JData.y = this.JData.y + parseInt(y);
             this.layout();
+        };
+        Window.prototype.setNoActive = function (flag) {
+            this.JData.noActive = flag;
         };
         /**
          *ウインドウの位置設定
@@ -468,6 +712,8 @@ var JSW;
                 else
                     y = (parentHeight - height) / 2;
             }
+            if (this.JData.x === x && this.JData.y === y)
+                return;
             this.JData.x = x;
             this.JData.y = y;
             this.layout();
@@ -479,6 +725,9 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setPosX = function (x) {
+            x = parseInt(x);
+            if (this.JData.x === x)
+                return;
             this.JData.x = parseInt(x);
             this.layout();
         };
@@ -489,6 +738,9 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setPosY = function (y) {
+            y = parseInt(y);
+            if (this.JData.x === y)
+                return;
             this.JData.y = parseInt(y);
             this.layout();
         };
@@ -546,9 +798,15 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setSize = function (width, height) {
-            this.JData.width = parseInt(width);
-            this.JData.height = parseInt(height);
+            width = parseInt(width);
+            height = parseInt(height);
+            if (this.JData.width === width && this.JData.height === height)
+                return;
+            this.JData.width = width;
+            this.JData.height = height;
             this.layout();
+            if (this.getParent())
+                this.getParent().layout();
         };
         /**
          *ウインドウの幅の設定
@@ -557,8 +815,13 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setWidth = function (width) {
-            this.JData.width = parseInt(width);
+            width = parseInt(width);
+            if (this.JData.width === width)
+                return;
+            this.JData.width = width;
             this.layout();
+            if (this.getParent())
+                this.getParent().layout();
         };
         /**
          *ウインドウの高さの設定
@@ -567,8 +830,13 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setHeight = function (height) {
-            this.JData.height = parseInt(height);
+            height = parseInt(height);
+            if (this.JData.height === height)
+                return;
+            this.JData.height = height;
             this.layout();
+            if (this.getParent())
+                this.getParent().layout();
         };
         /**
          * クライアント領域のpadding設定
@@ -620,8 +888,48 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setVisible = function (flag) {
+            var _this = this;
+            var node = this.getNode();
             this.JData.visible = flag;
-            this.getNode().style.display = flag ? 'block' : 'none';
+            if (flag) {
+                node.style.display = '';
+                var animation = this.JData.animationEnable ? this.JData.animation['show'] : '';
+                var animationEnd_1 = function () {
+                    _this.callEvent('visibled', { visible: true });
+                    node.removeEventListener("animationend", animationEnd_1);
+                    node.style.animation = '';
+                    node.style.display = '';
+                };
+                if (animation) {
+                    node.addEventListener("animationend", animationEnd_1);
+                    node.style.animation = animation;
+                }
+                else {
+                    node.style.animation = '';
+                    animationEnd_1.bind(node)();
+                }
+            }
+            else {
+                var animationEnd_2 = function () {
+                    var nodes = node.querySelectorAll('[data-jsw="Window"]');
+                    var count = nodes.length;
+                    for (var i = 0; i < count; i++) {
+                        nodes[i].Jsw.layout();
+                    }
+                    node.style.display = 'none';
+                    node.removeEventListener("animationend", animationEnd_2);
+                    node.style.animation = '';
+                    _this.callEvent('visibled', { visible: false });
+                };
+                var animation = this.JData.animationEnable ? this.JData.animation['close'] : '';
+                if (animation) {
+                    node.addEventListener("animationend", animationEnd_2);
+                    node.style.animation = animation;
+                }
+                else {
+                    animationEnd_2.bind(node)();
+                }
+            }
             if (this.getParent())
                 this.getParent().layout();
         };
@@ -633,6 +941,8 @@ var JSW;
          */
         Window.prototype.setOrderTop = function (flag) {
             this.JData.orderTop = flag;
+            if (this.getParent())
+                this.getParent().layout();
         };
         /**
          *ウインドウの重ね合わせ順位の設定
@@ -653,33 +963,12 @@ var JSW;
                 return;
             this.JData.layoutFlag = true;
             this.JData.redraw = true;
-            Jsw.layout(false);
+            JSW.WindowManager.layout(false);
             this.JData.layoutFlag = false;
         };
-        /**
-         *子ウインドウのサイズを再計算
-         *
-         * @param {boolean} flag true:強制再計算 false:必要があれば再計算
-         * @returns {boolean} 再計算の必要を行ったかどうか
-         * @memberof Window
-         */
-        Window.prototype.onMeasure = function (flag) {
-            var client = this.getClient();
-            for (var i = 0; i < client.childNodes.length; i++) {
-                var node = client.childNodes[i];
-                if (node.dataset && node.dataset.type === "Window")
-                    flag |= node.Jsw.onMeasure(false);
-            }
-            if (!this.isAutoSize())
-                return false;
-            if (!flag && !this.JData.redraw) {
-                return false;
-            }
-            this.JData.redraw = true;
-            this.getClient().style.width = 'auto';
-            this.getClient().style.height = 'auto';
-            this.setClientSize(this.getClient().scrollWidth, this.getClient().scrollHeight);
-            return true;
+        Window.prototype.active = function (flag) {
+            if (!this.JData.noActive)
+                this.getNode().dataset.jswActive = (flag || flag == null) ? 'true' : 'false';
         };
         /**
          *親のクライアント領域を返す
@@ -692,7 +981,9 @@ var JSW;
             if (node.style.position === 'fixed')
                 return window.innerWidth;
             var parent = node.parentNode;
-            return parent.scrollWidth;
+            if (parent.Jsw)
+                return parent.Jsw.getWidth();
+            return parent.offsetWidth;
         };
         /**
          *親のクライアント領域を返す
@@ -705,7 +996,48 @@ var JSW;
             if (node.style.position === 'fixed')
                 return window.innerHeight;
             var parent = node.parentNode;
-            return parent.scrollHeight;
+            if (parent.Jsw)
+                return parent.Jsw.getHeight();
+            return parent.offsetHeight;
+        };
+        /**
+         *子ウインドウのサイズを再計算
+        *
+        * @param {boolean} flag true:強制再計算 false:必要があれば再計算
+        * @returns {boolean} 再計算の必要を行ったかどうか
+        * @memberof Window
+        */
+        Window.prototype.onMeasure = function (flag) {
+            //表示状態の更新
+            if (this.JData.reshow) {
+                this.JData.reshow = false;
+                this.hNode.style.visibility = '';
+                var animation = this.JData.animationEnable ? this.JData.animation['show'] : '';
+                if (animation)
+                    this.hNode.style.animation = animation;
+            }
+            var client = this.getClient();
+            for (var i = 0; i < client.childNodes.length; i++) {
+                var node = client.childNodes[i];
+                if (node.dataset && node.dataset.jsw === "Window")
+                    flag |= node.Jsw.onMeasure(flag);
+            }
+            if (!flag && !this.JData.redraw)
+                return false;
+            //this.layout()
+            if (!this.isAutoSize())
+                return false;
+            this.callEvent('measure', {});
+            var width = this.getClient().scrollWidth;
+            var height = this.getClient().scrollHeight;
+            if (width === this.getClientWidth() && height === this.getClientHeight())
+                return false;
+            this.setClientSize(width, height);
+            this.JData.redraw = true;
+            //if (this.getParent())
+            //	this.getParent().layout()
+            //this.layout()
+            return true;
         };
         /**
          *位置やサイズの確定処理
@@ -715,31 +1047,32 @@ var JSW;
          */
         Window.prototype.onLayout = function (flag) {
             if (flag || this.JData.redraw) {
-                if (this.hNode.dataset.stat == 'maximize') {
+                //this.onMeasure(true)			//直下の子リスト
+                if (this.hNode.dataset.jswStat == 'maximize') {
                     this.setPos(0, 0);
                     this.setSize(this.getParentWidth(), this.getParentHeight());
                 }
-                this.JData.redraw = false;
                 this.hNode.style.left = this.JData.x + 'px';
                 this.hNode.style.top = this.JData.y + 'px';
                 this.hNode.style.width = this.JData.width + 'px';
                 this.hNode.style.height = this.JData.height + 'px';
                 flag = true;
-                Jsw.callEvent(this.hNode, 'layout');
+                this.callEvent('layout', {});
             }
-            //直下の子リスト
             var client = this.getClient();
             var nodes = [];
             for (var i = 0; i < client.childNodes.length; i++) {
                 var node = client.childNodes[i];
-                if (node.dataset && node.dataset.type === "Window")
+                if (node.dataset && node.dataset.jsw === "Window")
                     nodes.push(node);
             }
             var count = nodes.length;
             //配置順序リスト
-            nodes.sort(function (a, b) {
+            nodes.sort(function (anode, bnode) {
                 var priority = { top: 10, bottom: 10, left: 8, right: 8, client: 5 };
-                return priority[b.Jsw.JData.style] - priority[a.Jsw.JData.style];
+                var a = anode.Jsw.JData;
+                var b = bnode.Jsw.JData;
+                return priority[b.style] - priority[a.style];
             });
             var padding = this.JData.padding;
             var width = this.getClientWidth();
@@ -762,7 +1095,7 @@ var JSW;
                     case "top":
                         win.setPos(px1, py1);
                         win.setWidth(px2 - px1);
-                        y1 += win.getHeight() + margin.y2;
+                        y1 += win.getHeight() + margin.y1 + margin.y2;
                         break;
                     case "bottom":
                         win.setPos(px1, py2 - win.getHeight());
@@ -787,6 +1120,41 @@ var JSW;
                 win.onLayout(flag);
             }
             this.JData.redraw = false;
+            this.orderSort(client);
+            this.callEvent('layouted', {});
+        };
+        Window.prototype.orderSort = function (client) {
+            var nodes = [];
+            for (var i = 0; i < client.childNodes.length; i++) {
+                var node = client.childNodes[i];
+                if (node.dataset && node.dataset.jsw === "Window")
+                    nodes.push(node);
+            }
+            //重ね合わせソート
+            nodes.sort(function (anode, bnode) {
+                var a = anode.Jsw.JData;
+                var b = bnode.Jsw.JData;
+                if (a.orderTop)
+                    return 1;
+                if (b.orderTop)
+                    return -1;
+                var layer = a.orderLayer - b.orderLayer;
+                if (layer)
+                    return layer;
+                return parseInt(anode.style.zIndex) - parseInt(bnode.style.zIndex);
+            });
+            //Zオーダーの再附番
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i].style.zIndex = i;
+            }
+        };
+        Window.prototype.show = function (flag) {
+            if (flag == null || flag) {
+                this.JData.reshow = true;
+            }
+            else {
+                //this.hNode.style.visibility = 'hidden'
+            }
         };
         /**
          *ウインドウの重ね合わせ順位を上位に持って行く
@@ -795,51 +1163,34 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.foreground = function (flag) {
+            if (this.JData.noActive)
+                return;
             //親をフォアグラウンドに設定
             var activeNodes = new Set();
             var p = this.hNode;
-            activeNodes.add(p);
-            while (p = p.parentNode) {
-                activeNodes.add(p);
-                if (p.Jsw)
-                    p.Jsw.foreground(flag);
-            }
+            do {
+                if ((flag || flag == null) && p.dataset) {
+                    activeNodes.add(p);
+                    p.dataset.jswActive = 'true';
+                    p.style.zIndex = '1000';
+                    if (p.Jsw)
+                        p.Jsw.callEvent('active', { active: true });
+                }
+                this.orderSort(p);
+            } while (p = p.parentNode);
             if (flag || flag == null) {
-                this.hNode.dataset.active = 'true';
-                var activeWindows = document.querySelectorAll('[data-type="Window"][data-active="true"]');
+                var activeWindows = document.querySelectorAll('[data-jsw="Window"][data-jsw-active="true"]');
                 for (var i = 0, l = activeWindows.length; i < l; i++) {
                     var w = activeWindows[i];
-                    if (!activeNodes.has(w))
-                        w.dataset.active = 'false';
+                    if (!activeNodes.has(w)) {
+                        w.dataset.jswActive = 'false';
+                        w.Jsw.callEvent('active', { active: false });
+                    }
                 }
             }
-            //兄弟ウインドウの列挙しソート
-            var childs = this.hNode.parentNode.childNodes;
-            var nodes = [];
-            for (var i = 0; i < childs.length; i++) {
-                var node_1 = childs[i];
-                if (node_1.dataset && node_1.dataset.type === "Window")
-                    nodes.push(node_1);
-            }
-            var node = this.hNode;
-            nodes.sort(function (a, b) {
-                if (a.Jsw.JData.orderTop)
-                    return 1;
-                if (b.Jsw.JData.orderTop)
-                    return -1;
-                var layer = a.Jsw.JData.orderLayer - b.Jsw.JData.orderLayer;
-                if (layer)
-                    return layer;
-                if (a === node)
-                    return 1;
-                if (b === node)
-                    return -1;
-                return parseInt(a.style.zIndex) - parseInt(b.style.zIndex);
-            });
-            //Zオーダーの再附番
-            for (var i = 0; i < nodes.length; i++) {
-                nodes[i].style.zIndex = i;
-            }
+            var parent = this.getParent();
+            if (parent)
+                parent.layout();
         };
         /**
          *クライアント領域のスクロールの可否
@@ -865,8 +1216,9 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.close = function () {
+            var that = this;
             function animationEnd() {
-                var nodes = this.querySelectorAll('[data-type="Window"]');
+                var nodes = this.querySelectorAll('[data-jsw="Window"]');
                 var count = nodes.length;
                 for (var i = 0; i < count; i++) {
                     nodes[i].Jsw.layout();
@@ -874,11 +1226,26 @@ var JSW;
                 if (this.parentNode)
                     this.parentNode.removeChild(this);
                 this.removeEventListener("animationend", animationEnd);
-                var event = Jsw.createEvent("JSWclosed");
-                this.dispatchEvent(event);
+                that.callEvent('closed', {});
             }
-            this.hNode.addEventListener("animationend", animationEnd);
-            this.hNode.style.animation = "JSWclose 0.2s ease 0s 1 forwards";
+            var animation = this.JData.animationEnable ? this.JData.animation['close'] : '';
+            if (animation) {
+                this.hNode.addEventListener("animationend", animationEnd);
+                this.hNode.style.animation = animation;
+            }
+            else {
+                animationEnd.bind(this.hNode)();
+            }
+        };
+        /**
+         *アニメーションの設定
+         *
+         * @param {string} name アニメーション名
+         * @param {string} value アニメーションパラメータ
+         * @memberof Window
+         */
+        Window.prototype.setAnimation = function (name, value) {
+            this.JData.animation[name] = value;
         };
         /**
          *絶対位置の取得
@@ -944,7 +1311,7 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setClientSize = function (width, height) {
-            this.setSize(this.getNode().offsetWidth - this.getClientWidth() + width, this.getNode().offsetHeight - this.getClientHeight() + height);
+            this.setSize(width + this.JData.frameSize * 2 + this.JData.padding.x1 + this.JData.padding.x2, height + this.JData.frameSize + this.JData.padding.y1 + this.JData.padding.y2 * 2 + this.JData.titleSize);
         };
         /**
          *クライアントサイズを元にウインドウサイズを設定
@@ -953,7 +1320,7 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setClientWidth = function (width) {
-            this.setWidth(this.getNode().offsetWidth - this.getClientWidth() + width);
+            this.setWidth(width + this.JData.frameSize * 2 + this.JData.padding.x1 + this.JData.padding.x2);
         };
         /**
          *クライアントサイズを元にウインドウサイズを設定
@@ -962,7 +1329,7 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setClientHeight = function (height) {
-            this.setHeight(this.getNode().offsetHeight - this.getClientHeight() + height);
+            this.setWidth(height + this.JData.frameSize + this.JData.padding.y1 + this.JData.padding.y2 * 2 + this.JData.titleSize);
         };
         /**
          *クライアントサイズを取得
@@ -971,7 +1338,7 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.getClientWidth = function () {
-            return this.getClient().clientWidth;
+            return this.getWidth() - this.JData.frameSize * 2 - this.JData.padding.x1 - this.JData.padding.x2;
         };
         /**
          *クライアントサイズを取得
@@ -980,7 +1347,7 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.getClientHeight = function () {
-            return this.getClient().clientHeight;
+            return this.getHeight() - this.JData.frameSize * 2 - this.JData.padding.y1 - this.JData.padding.y2 - this.JData.titleSize;
         };
         /**
          *子ノードの追加
@@ -1003,9 +1370,9 @@ var JSW;
          */
         Window.prototype.setChildStyle = function (style) {
             this.JData.style = style;
-            var parent = this.hNode.parentNode;
-            if (parent && parent.Jsw)
-                parent.Jsw.layout();
+            var parent = this.getParent();
+            if (parent)
+                parent.layout();
         };
         /**
          *子ウインドウを全て切り離す
@@ -1017,7 +1384,7 @@ var JSW;
             var childList = client.childNodes;
             for (var i = childList.length - 1; i >= 0; i--) {
                 var child = childList[i];
-                if (child.dataset.type === "Window") {
+                if (child.dataset.jsw === "Window") {
                     child.Jsw.JData.parent = null;
                     client.removeChild(child);
                 }
@@ -1063,8 +1430,8 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.setTitle = function (title) {
-            if (this.hNode.childNodes[8]) {
-                this.hNode.childNodes[8].childNodes[0].textContent = title;
+            if (this.hNode.childNodes[9]) {
+                this.hNode.childNodes[9].childNodes[0].textContent = title;
             }
         };
         /**
@@ -1074,8 +1441,8 @@ var JSW;
          * @memberof Window
          */
         Window.prototype.getTitle = function () {
-            if (this.hNode.childNodes[8]) {
-                return this.hNode.childNodes[8].childNodes[0].textContent;
+            if (this.hNode.childNodes[9]) {
+                return this.hNode.childNodes[9].childNodes[0].textContent;
             }
             return "";
         };
@@ -1092,34 +1459,39 @@ var JSW;
                 this.style.minHeight = that.JData.titleSize + "px";
                 this.removeEventListener("animationend", animationEnd);
             }
-            if (this.hNode.dataset.stat != 'maximize') {
+            if (this.hNode.dataset.jswStat != 'maximize') {
                 this.JData.normalX = this.JData.x;
                 this.JData.normalY = this.JData.y;
                 this.JData.normalWidth = this.JData.width;
                 this.JData.normalHeight = this.JData.height;
-                this.hNode.dataset.stat = 'maximize';
+                this.hNode.dataset.jswStat = 'maximize';
                 this.hNode.style.minWidth = this.JData.width + "px";
                 this.hNode.style.minHeight = this.JData.height + "px";
-                this.hNode.style.animation = "JSWmaximize 0.2s ease 0s 1 forwards";
-                this.hNode.addEventListener("animationend", animationEnd);
+                var animation = this.JData.animationEnable ? this.JData.animation['maximize'] : '';
+                this.hNode.style.animation = animation;
+                if (animation)
+                    this.hNode.addEventListener("animationend", animationEnd);
+                else
+                    animationEnd.bind(this.hNode)();
             }
             else {
                 this.JData.x = this.JData.normalX;
                 this.JData.y = this.JData.normalY;
                 this.JData.width = this.JData.normalWidth;
                 this.JData.height = this.JData.normalHeight;
-                this.hNode.dataset.stat = 'normal';
-                this.hNode.style.animation = "JSWmaxrestore 0.2s ease 0s 1 forwards";
+                this.hNode.dataset.jswStat = 'normal';
+                var animation = this.JData.animationEnable ? this.JData.animation['maxrestore'] : '';
+                this.hNode.style.animation = animation;
             }
             if (flag) {
-                var icon = this.hNode.querySelector("*>[data-type=title]>[data-type=icon][data-kind=max]");
+                var icon = this.hNode.querySelector("*>[data-jsw-type=title]>[data-jsw-type=icon][data-jsw-kind=max]");
                 if (icon)
-                    icon.dataset.kind = "normal";
+                    icon.dataset.jswKind = "normal";
             }
             else {
-                var icon = this.hNode.querySelector("*>[data-type=title]>[data-type=icon][data-kind=normal]");
+                var icon = this.hNode.querySelector("*>[data-jsw-type=title]>[data-jsw-type=icon][data-jsw-kind=normal]");
                 if (icon)
-                    icon.dataset.kind = "max";
+                    icon.dataset.jswKind = "max";
             }
             this.layout();
         };
@@ -1132,23 +1504,25 @@ var JSW;
         Window.prototype.setMinimize = function (flag) {
             var that = this;
             this.hNode.addEventListener("animationend", function () { that.layout(); });
-            if (this.hNode.dataset.stat != 'minimize') {
+            if (this.hNode.dataset.jswStat != 'minimize') {
                 //client.style.animation="Jswminimize 0.2s ease 0s 1 forwards"
-                this.hNode.style.animation = "JSWminimize 0.2s ease 0s 1 forwards";
-                this.hNode.dataset.stat = 'minimize';
+                var animation = this.JData.animationEnable ? this.JData.animation['minimize'] : '';
+                this.hNode.style.animation = animation;
+                this.hNode.dataset.jswStat = 'minimize';
             }
             else {
                 //client.style.animation="Jswrestore 0.2s ease 0s 1 backwards"
-                this.hNode.style.animation = "JSWrestore 0.2s ease 0s 1 forwards";
-                this.hNode.dataset.stat = 'normal';
+                var animation = this.JData.animationEnable ? this.JData.animation['restore'] : '';
+                this.hNode.style.animation = animation;
+                this.hNode.dataset.jswStat = 'normal';
             }
             if (flag) {
-                var icon = this.hNode.querySelector("*>[data-type=title]>[data-type=icon][data-kind=min]");
-                icon.dataset.kind = "restore";
+                var icon = this.hNode.querySelector("*>[data-jsw-type=title]>[data-jsw-type=icon][data-jsw-kind=min]");
+                icon.dataset.jswKind = "restore";
             }
             else {
-                var icon = this.hNode.querySelector("*>[data-type=title]>[data-type=icon][data-kind=restore]");
-                icon.dataset.kind = "min";
+                var icon = this.hNode.querySelector("*>[data-jsw-type=title]>[data-jsw-type=icon][data-jsw-kind=restore]");
+                icon.dataset.jswKind = "min";
             }
             this.JData.minimize = flag;
             this.layout();
@@ -1177,6 +1551,1052 @@ var JSW;
         return FrameWindow;
     }(Window));
     JSW.FrameWindow = FrameWindow;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    /**
+     *ボタン用クラス
+     *
+     * @export
+     * @class Button
+     * @extends {Window}
+     */
+    var Button = /** @class */ (function (_super) {
+        __extends(Button, _super);
+        /**
+         *Creates an instance of Button.
+         * @param {string} [text] ボタンに設定するテキスト
+         * @memberof Button
+         */
+        function Button(text, value) {
+            var _this = _super.call(this) || this;
+            _this.setAutoSize(true);
+            _this.setJswStyle('Button');
+            _this.nodeValue = value;
+            //this.setAlign('center')
+            var button = document.createElement('div');
+            _this.getClient().appendChild(button);
+            button.tabIndex = 0;
+            var nodeText = document.createElement('span');
+            button.appendChild(nodeText);
+            _this.nodeText = nodeText;
+            if (text)
+                _this.setText(text);
+            button.addEventListener('keypress', function (e) {
+                if (e.keyCode !== 13)
+                    _this.callEvent('submit', { event: e });
+            });
+            button.addEventListener('click', function (e) {
+                _this.callEvent('buttonClick', { event: e });
+                _this.callEvent('submit', { event: e });
+            });
+            button.addEventListener('dblclick', function (e) {
+                _this.callEvent('buttonDblClick', { event: e });
+            });
+            return _this;
+        }
+        /**
+         *ボタンに対してテキストを設定する
+         *
+         * @param {string} text
+         * @memberof Button
+         */
+        Button.prototype.setText = function (text) {
+            var nodeText = this.nodeText;
+            nodeText.textContent = text;
+            this.layout();
+        };
+        /**
+         *ボタンに設定したテキストを取得する
+         *
+         * @returns {string}
+         * @memberof Button
+         */
+        Button.prototype.getText = function () {
+            return this.nodeText.textContent;
+        };
+        Button.prototype.setAlign = function (style) {
+            var node = this.getClient();
+            node.style.justifyContent = style;
+        };
+        Button.prototype.getValue = function () {
+            return this.nodeValue;
+        };
+        /**
+         *イベントの設定
+         * 'buttonClick','buttonDblClick'
+         *
+         * @template K
+         * @param {K} type
+         * @param {(ev: ButtonEventMap[K]) => any} listener
+         * @memberof Button
+         */
+        Button.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
+        };
+        return Button;
+    }(JSW.Window));
+    JSW.Button = Button;
+    var ImageButton = /** @class */ (function (_super) {
+        __extends(ImageButton, _super);
+        /**
+         *Creates an instance of Button.
+         * @param {string} [text] ボタンに設定するテキスト
+         * @memberof Button
+         */
+        function ImageButton(image, alt) {
+            var _this = _super.call(this) || this;
+            _this.setWidth(64);
+            //this.setAutoSize(true)
+            _this.setJswStyle('Button');
+            //this.setAlign('center')
+            var button = document.createElement('div');
+            _this.getClient().appendChild(button);
+            button.tabIndex = 0;
+            var nodeImg = document.createElement('img');
+            button.appendChild(nodeImg);
+            _this.nodeImg = nodeImg;
+            if (alt)
+                nodeImg.alt = alt;
+            nodeImg.addEventListener('load', function () {
+                console.log('load %d %d', nodeImg.naturalWidth, nodeImg.naturalHeight);
+                _this.layout();
+            });
+            nodeImg.src = image;
+            button.addEventListener('keypress', function (e) {
+                if (e.keyCode !== 13)
+                    _this.callEvent('submit', { event: e });
+            });
+            button.addEventListener('click', function (e) {
+                _this.callEvent('buttonClick', { event: e });
+                _this.callEvent('submit', { event: e });
+            });
+            button.addEventListener('dblclick', function (e) {
+                _this.callEvent('buttonDblClick', { event: e });
+            });
+            return _this;
+        }
+        /**
+         *ボタンに対してテキストを設定する
+         *
+         * @param {string} text
+         * @memberof Button
+         */
+        ImageButton.prototype.setText = function (text) {
+            this.nodeImg.alt = text;
+            this.layout();
+        };
+        /**
+         *ボタンに設定したテキストを取得する
+         *
+         * @returns {string}
+         * @memberof Button
+         */
+        ImageButton.prototype.getText = function () {
+            return this.nodeImg.alt;
+        };
+        ImageButton.prototype.setAlign = function (style) {
+            var node = this.getClient();
+            node.style.justifyContent = style;
+        };
+        /**
+         *イベントの設定
+         * 'buttonClick','buttonDblClick'
+         *
+         * @template K
+         * @param {K} type
+         * @param {(ev: ButtonEventMap[K]) => any} listener
+         * @memberof Button
+         */
+        ImageButton.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
+        };
+        return ImageButton;
+    }(JSW.Window));
+    JSW.ImageButton = ImageButton;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    var CheckBox = /** @class */ (function (_super) {
+        __extends(CheckBox, _super);
+        function CheckBox(params) {
+            var _this = _super.call(this) || this;
+            _this.setJswStyle('CheckBox');
+            _this.setAutoSize(true);
+            var node = _this.getClient();
+            var textArea = document.createElement('label');
+            node.appendChild(textArea);
+            var nodeCheck = document.createElement('input');
+            _this.nodeCheck = nodeCheck;
+            nodeCheck.type = 'checkbox';
+            textArea.appendChild(nodeCheck);
+            if (params && params.checked != null)
+                nodeCheck.checked = params.checked;
+            var nodeText = document.createElement('span');
+            _this.nodeText = nodeText;
+            textArea.appendChild(nodeText);
+            if (params && params.text)
+                _this.setText(params.text);
+            return _this;
+        }
+        CheckBox.prototype.isCheck = function () {
+            return this.nodeCheck.checked;
+        };
+        CheckBox.prototype.setCheck = function (check) {
+            this.nodeCheck.checked = check;
+        };
+        CheckBox.prototype.setText = function (text) {
+            var nodeText = this.nodeText;
+            nodeText.textContent = text;
+        };
+        CheckBox.prototype.getText = function () {
+            var nodeText = this.nodeText;
+            return nodeText.textContent;
+        };
+        CheckBox.prototype.getTextNode = function () {
+            return this.nodeText;
+        };
+        return CheckBox;
+    }(JSW.Window));
+    JSW.CheckBox = CheckBox;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    var DrawerView = /** @class */ (function (_super) {
+        __extends(DrawerView, _super);
+        function DrawerView() {
+            var _this = _super.call(this) || this;
+            var client = _this.getClient();
+            client.dataset.kind = 'Drawer';
+            _this.setSize(300, 200);
+            _this.setOverlap(true);
+            _this.addEventListener('active', function (e) {
+                if (!e.active)
+                    _this.close();
+            });
+            _this.setAnimation('show', 'weDrawerShow 0.5s ease 0s normal');
+            _this.setAnimation('close', 'weDrawerClose 0.5s ease 0s normal');
+            _this.foreground(true);
+            return _this;
+        }
+        DrawerView.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
+        };
+        DrawerView.prototype.addItem = function (text, value, icon) {
+            var _this = this;
+            var client = this.getClient();
+            var itemNode = document.createElement('div');
+            itemNode.dataset.kind = 'DrawerItem';
+            var iconNode = document.createElement('div');
+            iconNode.dataset.kind = 'DrawerIcon';
+            itemNode.appendChild(iconNode);
+            if (icon)
+                iconNode.style.backgroundImage = 'url("' + icon + '")';
+            var textNode = document.createElement('div');
+            textNode.dataset.kind = 'DrawerText';
+            itemNode.appendChild(textNode);
+            textNode.textContent = text;
+            itemNode.addEventListener('click', function () {
+                _this.callEvent('selectItem', { text: text, value: value, icon: icon });
+                _this.close();
+            });
+            client.appendChild(itemNode);
+        };
+        DrawerView.prototype.onLayout = function (flag) {
+            var height = this.getParentHeight();
+            if (height != this.getHeight())
+                this.setHeight(height);
+            _super.prototype.onLayout.call(this, flag);
+        };
+        return DrawerView;
+    }(JSW.Window));
+    JSW.DrawerView = DrawerView;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    var Label = /** @class */ (function (_super) {
+        __extends(Label, _super);
+        function Label(text) {
+            var _this = _super.call(this) || this;
+            _this.setJswStyle('Label');
+            var node = _this.getClient();
+            var nodeText = document.createElement('span');
+            node.appendChild(nodeText);
+            _this.nodeText = nodeText;
+            if (text)
+                _this.setText(text);
+            _this.setAutoSize(true);
+            return _this;
+        }
+        Label.prototype.setFontSize = function (size) {
+            var nodeText = this.nodeText;
+            nodeText.style.fontSize = size + 'px';
+            this.layout();
+        };
+        Label.prototype.setText = function (text) {
+            var nodeText = this.nodeText;
+            nodeText.textContent = text;
+        };
+        Label.prototype.getText = function () {
+            return this.nodeText.textContent;
+        };
+        Label.prototype.getTextNode = function () {
+            return this.nodeText;
+        };
+        Label.prototype.setAlign = function (style) {
+            var node = this.getClient();
+            //node.style.alignItems = style;
+            node.style.justifyContent = style;
+        };
+        return Label;
+    }(JSW.Window));
+    JSW.Label = Label;
+})(JSW || (JSW = {}));
+var JSW;
+(function (JSW) {
+    function Sleep(timeout) {
+        return new Promise(function (resolv) {
+            setTimeout(function () {
+                resolv();
+            }, timeout);
+        });
+    }
+    JSW.Sleep = Sleep;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    /**
+     *ListView用クラス
+    *
+    * @export
+    * @class ListView
+    * @extends {Window}
+    */
+    var ListView = /** @class */ (function (_super) {
+        __extends(ListView, _super);
+        /**
+         *Creates an instance of ListView.
+         * @param {*} [params] ウインドウ作成パラメータ
+         * @memberof ListView
+         */
+        function ListView(params) {
+            var _this = _super.call(this, params) || this;
+            _this.lastIndex = 0;
+            _this.selectIndexes = [];
+            _this.sortIndex = -1;
+            _this.sortVector = false;
+            _this.columnWidth = [];
+            _this.columnAutoIndex = -1;
+            _this.areaWidth = 0;
+            var that = _this;
+            var client = _this.getClient();
+            client.dataset.jswStyle = 'ListView';
+            var headerBack = document.createElement('div');
+            _this.headerBack = headerBack;
+            headerBack.dataset.kind = 'ListHeaderBack';
+            client.appendChild(headerBack);
+            var headerArea = document.createElement('div');
+            _this.headerArea = headerArea;
+            headerArea.dataset.kind = 'ListHeaderArea';
+            client.appendChild(headerArea);
+            var resizers = document.createElement('div');
+            _this.resizers = resizers;
+            resizers.dataset.kind = 'ListResizers';
+            headerArea.appendChild(resizers);
+            var headers = document.createElement('div');
+            _this.headers = headers;
+            headers.dataset.kind = 'ListHeaders';
+            headerArea.appendChild(headers);
+            var itemArea = document.createElement('div');
+            itemArea.dataset.kind = 'ListItemArea';
+            _this.itemArea = itemArea;
+            client.appendChild(itemArea);
+            client.addEventListener('scroll', function () {
+                itemArea.style.left = this.scrollLeft + 'px';
+                if (itemArea.childElementCount) {
+                    var column = itemArea.childNodes[0];
+                    column.style.marginLeft = -this.scrollLeft + 'px';
+                    headerBack.style.marginLeft = this.scrollLeft + 'px';
+                }
+            });
+            client.addEventListener('dragover', function () {
+                event.preventDefault();
+            });
+            client.addEventListener('drop', function (e) {
+                that.callEvent('itemDrop', { itemIndex: -1, subItemIndex: -1, event: e });
+                event.preventDefault();
+            });
+            return _this;
+        }
+        /**
+         *カラムのサイズを設定
+         *
+         * @param {number} index
+         * @param {number} size
+         * @memberof ListView
+         */
+        ListView.prototype.setColumnWidth = function (index, size) {
+            this.columnWidth[index] = size;
+            this.headers.children[index].style.width = size + 'px';
+            this.resize();
+        };
+        /**
+         *カラムのスタイルを設定
+         *
+         * @param {number} col カラム番号
+         * @param {('left'|'right'|'center')} style スタイル
+         * @memberof ListView
+         */
+        ListView.prototype.setColumnStyle = function (col, style) {
+            var columns = this.itemArea.childNodes;
+            var column = columns[col];
+            column.style.justifyContent = style;
+        };
+        /**
+         *カラムのスタイルを複数設定
+         *
+         * @param {(('left' | 'right' | 'center')[])} styles スタイル
+         * @memberof ListView
+         */
+        ListView.prototype.setColumnStyles = function (styles) {
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, l = styles.length; i < l; i++) {
+                var column = columns[i];
+                column.vector = styles[i];
+            }
+        };
+        /**
+         *ヘッダを追加
+         *配列にすると複数追加でき、さらに配列を含めるとサイズが指定できる
+         * @param {(string|(string|[string,number])[])} labels ラベル | [ラベル,ラベル,・・・] | [[ラベル,幅],[ラベル,幅],・・・]
+         * @param {number} [size] 幅
+         * @memberof ListView
+         */
+        ListView.prototype.addHeader = function (label, size) {
+            var headers = this.headers;
+            var labels = [];
+            if (label instanceof Array)
+                labels = label;
+            else
+                labels = [label];
+            var _loop_1 = function (i, l) {
+                var label_1 = labels[i];
+                var text = void 0;
+                var width = size;
+                if (label_1 instanceof Array) {
+                    text = label_1[0];
+                    width = label_1[1];
+                }
+                else {
+                    text = label_1;
+                }
+                index = headers.childElementCount;
+                header = document.createElement('div');
+                headers.appendChild(header);
+                header.textContent = text;
+                if (width != null) {
+                    this_1.columnWidth[index] = width;
+                    header.style.width = width + 'px';
+                }
+                else {
+                    this_1.columnWidth[index] = header.offsetWidth;
+                }
+                var that = this_1;
+                //ヘッダが押されたらソート処理
+                header.addEventListener('click', function () {
+                    var j;
+                    for (j = 0; j < headers.childElementCount; j++) {
+                        if (headers.childNodes[j] === this)
+                            break;
+                    }
+                    var sort = true;
+                    if (that.sortIndex === j)
+                        sort = !that.sortVector;
+                    that.sortItem(j, sort);
+                });
+                itemArea = this_1.itemArea;
+                column = document.createElement('div');
+                column.dataset.kind = 'ListColumn';
+                this_1.itemArea.appendChild(column);
+                //リサイズバーの設定
+                resizers = this_1.resizers;
+                var resize = document.createElement('div');
+                resize.index = index;
+                resizers.appendChild(resize);
+                JSW.WindowManager.enableMove(resize);
+                resize.addEventListener("move", function (e) {
+                    var p = e.params;
+                    var x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
+                    var h = headers.childNodes[this.index];
+                    var width = x - h.offsetLeft;
+                    h.style.width = width + 'px';
+                    that.columnWidth[this.index] = width;
+                    for (var i_1 = this.index, length_2 = resizers.childElementCount; i_1 < length_2; i_1++) {
+                        var node = headers.children[i_1];
+                        var r = resizers.childNodes[i_1];
+                        r.style.left = node.offsetLeft + node.offsetWidth + 'px';
+                        var column_1 = itemArea.children[i_1];
+                        column_1.style.width = node.clientLeft + node.offsetWidth - column_1.clientLeft + 'px';
+                    }
+                });
+            };
+            var this_1 = this, index, header, itemArea, column, resizers;
+            for (var i = 0, l = labels.length; i < l; i++) {
+                _loop_1(i, l);
+            }
+        };
+        /**
+         *アイテムのソートを行う
+         *
+         * @param {number} [index] カラム番号
+         * @param {boolean} [order] 方向 true:昇順 false:降順
+         * @memberof ListView
+         */
+        ListView.prototype.sortItem = function (index, order) {
+            this.clearSelectItem();
+            if (index != null) {
+                this.sortIndex = index;
+                order = order == null ? true : order;
+                this.sortVector = order;
+                var headers = this.headers;
+                for (var i = 0, length_3 = headers.childElementCount; i < length_3; i++) {
+                    var node = headers.childNodes[i];
+                    if (index === i)
+                        node.dataset.sort = order ? 'asc' : 'desc';
+                    else
+                        node.dataset.sort = '';
+                    node.className = node.className; //IE11対策
+                }
+            }
+            index = this.sortIndex;
+            order = this.sortVector;
+            var columns = this.itemArea.childNodes;
+            var column = columns[index];
+            var items = column.childNodes;
+            //ソートリストの作成
+            var sortList = [];
+            for (var i = 0, length_4 = items.length; i < length_4; i++) {
+                sortList.push(i);
+            }
+            sortList.sort(function (a, b) {
+                var v1 = items[a].keyValue != null ? items[a].keyValue : items[a].textContent;
+                var v2 = items[b].keyValue != null ? items[b].keyValue : items[b].textContent;
+                return (v1 > v2 ? 1 : -1) * (order ? 1 : -1);
+            });
+            //ソート処理
+            for (var i = 0, length_5 = columns.length; i < length_5; i++) {
+                var column_2 = columns[i];
+                //子ノードの保存と削除
+                var items_1 = [];
+                while (column_2.childElementCount) {
+                    items_1.push(column_2.childNodes[0]);
+                    column_2.removeChild(column_2.childNodes[0]);
+                }
+                //子ノードの再追加
+                for (var j = 0, length_6 = sortList.length; j < length_6; j++) {
+                    column_2.appendChild(items_1[sortList[j]]);
+                }
+            }
+        };
+        /**
+         *アイテムを選択する
+         *すでにある選択は解除される
+         * @param {(number | number[])} index レコード番号
+         * @memberof ListView
+         */
+        ListView.prototype.selectItem = function (index) {
+            this.clearSelectItem();
+            this.addSelectItem(index);
+        };
+        /**
+         *アイテムの選択を全て解除する
+         *
+         * @memberof ListView
+         */
+        ListView.prototype.clearSelectItem = function () {
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_7 = columns.length; i < length_7; i++) {
+                var column = columns[i];
+                for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
+                    var node = column.childNodes[this.selectIndexes[j]];
+                    node.dataset.itemSelect = 'false';
+                    node.className = node.className; //IE11対策
+                }
+            }
+            this.selectIndexes = [];
+        };
+        /**
+         *アイテムの選択を追加する
+         *
+         * @param {(number | number[])} index レコード番号
+         * @memberof ListView
+         */
+        ListView.prototype.addSelectItem = function (index) {
+            var indexes = (index instanceof Array ? index : [index]);
+            Array.prototype.push.apply(this.selectIndexes, indexes);
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_8 = columns.length; i < length_8; i++) {
+                var column = columns[i];
+                for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
+                    var node = column.childNodes[this.selectIndexes[j]];
+                    node.dataset.itemSelect = 'true';
+                    node.className = node.className; //IE11対策
+                }
+            }
+        };
+        /**
+         *アイテムの選択を解除する
+         *
+         * @param {(number | number[])} index レコード番号
+         * @memberof ListView
+         */
+        ListView.prototype.delSelectItem = function (index) {
+            var indexes = (typeof index === 'object' ? index : [index]);
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_9 = columns.length; i < length_9; i++) {
+                var column = columns[i];
+                for (var j = 0, l = indexes.length; j < l; j++) {
+                    var node = column.childNodes[indexes[j]];
+                    node.dataset.itemSelect = 'false';
+                    node.className = node.className; //IE11対策
+                }
+            }
+            var newIndexes = [];
+            for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
+                var index_1 = this.selectIndexes[j];
+                if (indexes.indexOf(index_1) < 0)
+                    newIndexes.push(index_1);
+            }
+            this.selectIndexes = newIndexes;
+        };
+        /**
+         *アイテムの数を返す
+         *
+         * @returns {number} アイテム数
+         * @memberof ListView
+         */
+        ListView.prototype.getItemCount = function () {
+            if (this.itemArea.childElementCount === 0)
+                return 0;
+            return this.itemArea.childNodes[0].childElementCount;
+        };
+        /**
+         *アイテムが選択されているか返す
+         *
+         * @param {number} index レコード番号
+         * @returns {boolean}
+         * @memberof ListView
+         */
+        ListView.prototype.isSelectItem = function (index) {
+            return this.selectIndexes.indexOf(index) >= 0;
+        };
+        ListView.getIndexOfNode = function (node) {
+            return [].slice.call(node.parentNode.childNodes).indexOf(node);
+        };
+        /**
+         *アイテムを全て削除する
+         *
+         * @memberof ListView
+         */
+        ListView.prototype.clearItem = function () {
+            this.selectIndexes = [];
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_10 = columns.length; i < length_10; i++) {
+                var column = columns[i];
+                while (column.childElementCount)
+                    column.removeChild(column.childNodes[0]);
+            }
+        };
+        /**
+         *対象セルのノードを取得
+         *
+         * @param {number} row
+         * @param {number} col
+         * @returns
+         * @memberof ListView
+         */
+        ListView.prototype.getCell = function (row, col) {
+            var columns = this.itemArea.childNodes;
+            var column = columns[col];
+            if (column == null)
+                return null;
+            return column.childNodes[row];
+        };
+        /**
+         *アイテムに値を設定する
+         *
+         * @param {number} index レコード番号
+         * @param {*} value 値
+         * @memberof ListView
+         */
+        ListView.prototype.setItemValue = function (index, value) {
+            var cell = this.getCell(index, 0);
+            if (cell)
+                cell.value = value;
+        };
+        /**
+         *アイテムの値を取得する
+         *
+         * @param {number} index レコード番号
+         * @returns 値
+         * @memberof ListView
+         * @returns {string} アイテムに設定されている値
+         */
+        ListView.prototype.getItemValue = function (index) {
+            var cell = this.getCell(index, 0);
+            return cell.value;
+        };
+        /**
+         *アイテムのテキスト内容を取得
+         *
+         * @param {number} row 行
+         * @param {number} col 列
+         * @returns {string} アイテムに設定されているテキスト
+         * @memberof ListView
+         */
+        ListView.prototype.getItemText = function (row, col) {
+            var cell = this.getCell(row, col);
+            return cell.textContent;
+        };
+        /**
+         *最初に選択されているアイテムを返す
+         *
+         * @returns {number} 選択されているアイテム番号(見つからなかったら-1)
+         * @memberof ListView
+         */
+        ListView.prototype.getSelectItem = function () {
+            for (var _i = 0, _a = this.selectIndexes; _i < _a.length; _i++) {
+                var index = _a[_i];
+                return index;
+            }
+            return -1;
+        };
+        /**
+         *選択されている値を全て取得する
+         *
+         * @returns {any[]} 選択されているアイテムの値
+         * @memberof ListView
+         */
+        ListView.prototype.getSelectValues = function () {
+            var values = [];
+            for (var _i = 0, _a = this.selectIndexes; _i < _a.length; _i++) {
+                var index = _a[_i];
+                values.push(this.getItemValue(index));
+            }
+            return values;
+        };
+        /**
+         *指定行のセルノードを返す
+         *
+         * @param {number} row
+         * @returns
+         * @memberof ListView
+         */
+        ListView.prototype.getLineCells = function (row) {
+            var cells = [];
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_11 = columns.length; i < length_11; i++) {
+                var column = columns[i];
+                cells.push(column.childNodes[row]);
+            }
+            return cells;
+        };
+        /**
+         *アイテムを追加する
+         *アイテムはテキストかノードが指定できる
+         *配列を渡した場合は、複数追加となる
+         * @param {(string|(string|HTMLElement)[])} value テキストもしくはノード
+         * @returns
+         * @memberof ListView
+         */
+        ListView.prototype.addItem = function (value, itemValue) {
+            var vector = { left: 'flex-start', center: 'center', right: 'flex-end' };
+            var that = this;
+            var columns = this.itemArea.childNodes;
+            for (var i = 0, length_12 = columns.length; i < length_12; i++) {
+                var column = columns[i];
+                var cell = document.createElement('div');
+                cell.draggable = true;
+                cell.dataset.kind = 'ListCell';
+                if (column.vector)
+                    cell.style.justifyContent = vector[column.vector];
+                column.appendChild(cell);
+                cell.addEventListener('mouseover', function () {
+                    var index = ListView.getIndexOfNode(this);
+                    for (var i_2 = 0, length_13 = columns.length; i_2 < length_13; i_2++) {
+                        var column_3 = columns[i_2];
+                        if (that.overIndex != null && that.overIndex < column_3.childElementCount) {
+                            var node = column_3.childNodes[that.overIndex];
+                            node.dataset.itemHover = 'false';
+                            node.className = node.className; //IE対策
+                        }
+                        var node2 = column_3.childNodes[index];
+                        node2.dataset.itemHover = 'true';
+                        node2.className = node2.className; //IE対策
+                    }
+                    that.overIndex = index;
+                });
+                cell.addEventListener('dragstart', function (e) {
+                    var index = ListView.getIndexOfNode(this);
+                    var index2 = ListView.getIndexOfNode(this.parentNode);
+                    that.callEvent('itemDragStart', { itemIndex: index, subItemIndex: index2, event: e });
+                });
+                cell.addEventListener('dragleave', function () {
+                    var index = ListView.getIndexOfNode(this);
+                    var cells = that.getLineCells(index);
+                    for (var _i = 0, cells_1 = cells; _i < cells_1.length; _i++) {
+                        var cell_1 = cells_1[_i];
+                        cell_1.dataset.drag = '';
+                        cell_1.className = cell_1.className; //IE対策
+                    }
+                });
+                cell.addEventListener('dragenter', function () {
+                    var index = ListView.getIndexOfNode(this);
+                    var cells = that.getLineCells(index);
+                    for (var _i = 0, cells_2 = cells; _i < cells_2.length; _i++) {
+                        var cell_2 = cells_2[_i];
+                        cell_2.dataset.drag = 'over';
+                        cell_2.className = cell_2.className; //IE対策
+                    }
+                    event.preventDefault();
+                });
+                cell.addEventListener('dragover', function () {
+                    event.preventDefault();
+                });
+                cell.addEventListener('drop', function (e) {
+                    var index = ListView.getIndexOfNode(this);
+                    var index2 = ListView.getIndexOfNode(this.parentNode);
+                    var cells = that.getLineCells(index);
+                    for (var _i = 0, cells_3 = cells; _i < cells_3.length; _i++) {
+                        var cell_3 = cells_3[_i];
+                        cell_3.dataset.drag = 'over';
+                        cell_3.className = cell_3.className; //IE対策
+                    }
+                    that.callEvent('itemDrop', { itemIndex: index, subItemIndex: index2, event: e });
+                    event.preventDefault();
+                });
+                cell.addEventListener('dragstart', function (e) {
+                    var index = ListView.getIndexOfNode(this);
+                    var index2 = ListView.getIndexOfNode(this.parentNode);
+                    that.callEvent('itemDragStart', { itemIndex: index, subItemIndex: index2, event: e });
+                });
+                cell.addEventListener('click', function (e) {
+                    var index = ListView.getIndexOfNode(this);
+                    var index2 = ListView.getIndexOfNode(this.parentNode);
+                    if (e.ctrlKey) {
+                        if (!that.isSelectItem(index))
+                            that.addSelectItem(index);
+                        else
+                            that.delSelectItem(index);
+                    }
+                    else if (e.shiftKey) {
+                        var indexes = [];
+                        var s = Math.min(that.lastIndex, index);
+                        var e_1 = Math.max(that.lastIndex, index);
+                        for (var i_3 = s; i_3 <= e_1; i_3++)
+                            indexes.push(i_3);
+                        that.selectItem(indexes);
+                    }
+                    else
+                        that.selectItem(index);
+                    that.lastIndex = index;
+                    that.callEvent('itemClick', { itemIndex: index, subItemIndex: index2, event: e });
+                });
+                cell.addEventListener('dblclick', function (e) {
+                    var index = ListView.getIndexOfNode(this);
+                    var index2 = ListView.getIndexOfNode(this.parentNode);
+                    that.callEvent('itemDblClick', { itemIndex: index, subItemIndex: index2, event: e });
+                });
+            }
+            if (columns.length === 0)
+                return -1;
+            var index = columns[0].childElementCount - 1;
+            if (value instanceof Array) {
+                for (var i = 0, l = value.length; i < l; i++) {
+                    this.setItem(index, i, value[i]);
+                }
+            }
+            else
+                this.setItem(index, 0, value);
+            if (itemValue)
+                this.setItemValue(index, itemValue);
+            if (this.areaWidth !== this.itemArea.clientWidth) {
+                this.areaWidth = this.itemArea.clientWidth;
+                this.resize();
+            }
+            return index;
+        };
+        /**
+         *ソート用のキーを設定する
+         *
+         * @param {number} row レコード番号
+         * @param {number} column カラム番号
+         * @param {*} value キー
+         * @returns
+         * @memberof ListView
+         */
+        ListView.prototype.setSortKey = function (row, column, value) {
+            var c = this.itemArea.childNodes[column];
+            if (c == null)
+                return false;
+            var r = c.childNodes[row];
+            if (r == null)
+                return false;
+            r.keyValue = value;
+            return true;
+        };
+        /**
+         *ソート用のキーをまとめて設定する
+         *
+         * @param {number} row レコード番号
+         * @param {any[]} values キー配列
+         * @memberof ListView
+         */
+        ListView.prototype.setSortKeys = function (row, values) {
+            for (var i = 0, l = values.length; i < l; i++) {
+                var c = this.itemArea.childNodes[i];
+                if (c == null)
+                    break;
+                var r = c.childNodes[row];
+                if (r == null)
+                    break;
+                r.keyValue = values[i];
+            }
+        };
+        /**
+         *アイテムを書き換える
+         *
+         * @param {number} row レコード番号
+         * @param {number} column カラム番号
+         * @param {(string|HTMLElement)} value テキストもしくはノード
+         * @returns
+         * @memberof ListView
+         */
+        ListView.prototype.setItem = function (row, column, value) {
+            var c = this.itemArea.childNodes[column];
+            if (c == null)
+                return false;
+            var r = c.childNodes[row];
+            if (r == null)
+                return false;
+            if (!(value instanceof HTMLElement)) {
+                var item = document.createElement('div');
+                item.textContent = value.toString();
+                r.appendChild(item);
+            }
+            else {
+                r.appendChild(value);
+            }
+        };
+        /**
+         *ヘッダに合わせてカラムサイズを調整する
+         *基本的には直接呼び出さない
+         * @memberof ListView
+         */
+        ListView.prototype.resize = function () {
+            var headers = this.headers;
+            var resizers = this.resizers;
+            var itemArea = this.itemArea;
+            var lmitWidth = itemArea.clientWidth;
+            for (var i = 0, length_14 = headers.childElementCount; i < length_14; i++) {
+                lmitWidth -= this.columnWidth[i];
+            }
+            var autoIndex = this.columnAutoIndex;
+            for (var i = 0, length_15 = headers.childElementCount; i < length_15; i++) {
+                var node = headers.childNodes[i];
+                var resize = resizers.childNodes[i];
+                var column = itemArea.children[i];
+                var width = this.columnWidth[i];
+                if (autoIndex === i || (autoIndex === -1 && i === length_15 - 1))
+                    width += lmitWidth;
+                node.style.width = width + 'px';
+                resize.style.left = node.offsetLeft + width - resize.offsetWidth / 2 + 'px';
+                column.style.width = width + 'px';
+            }
+        };
+        ListView.prototype.onLayout = function (flag) {
+            _super.prototype.onLayout.call(this, flag);
+            this.resize();
+        };
+        ListView.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
+        };
+        return ListView;
+    }(JSW.Window));
+    JSW.ListView = ListView;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    var MessageBox = /** @class */ (function (_super) {
+        __extends(MessageBox, _super);
+        function MessageBox(title, msg, buttons) {
+            var _this = _super.call(this) || this;
+            _this.setSize(300, 200);
+            _this.setPos();
+            _this.setTitle(title);
+            _this.active();
+            _this.setPadding(10, 10, 10, 10);
+            var label = new JSW.Label(msg);
+            _this.label = label;
+            _this.addChild(label, 'top');
+            label.setAlign('center');
+            label.setMargin(10, 10, 10, 50);
+            var that = _this;
+            if (!buttons) {
+                buttons = { 'OK': true };
+            }
+            for (var name_1 in buttons) {
+                var b = new JSW.Button(name_1, buttons[name_1]);
+                b.setAlign('center');
+                _this.addChild(b, 'top');
+                b.addEventListener('buttonClick', function () {
+                    that.callEvent('buttonClick', this.getValue());
+                    that.close();
+                }.bind(b));
+            }
+            return _this;
+        }
+        MessageBox.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
+        };
+        MessageBox.prototype.setText = function (text) {
+            this.label.setText(text);
+        };
+        return MessageBox;
+    }(JSW.FrameWindow));
+    JSW.MessageBox = MessageBox;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    /**
+     *パネル用クラス
+     *
+     * @export
+     * @class Panel
+     * @extends {Window}
+     */
+    var Panel = /** @class */ (function (_super) {
+        __extends(Panel, _super);
+        function Panel() {
+            var _this = _super.call(this) || this;
+            _this.setJswStyle('Panel');
+            _this.setHeight(32);
+            return _this;
+        }
+        return Panel;
+    }(JSW.Window));
+    JSW.Panel = Panel;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
     /**
      *分割ウインドウ用クラス
      *
@@ -1194,136 +2614,171 @@ var JSW;
          */
         function Splitter(splitPos, splitType) {
             var _this = _super.call(this) || this;
-            _this.JDataSplit = {};
-            _this.slideHandle = null;
-            _this.slideTimeoutHandle = null;
+            _this.JDataSplit = {
+                drawerMode: false,
+                drawerModeNow: false,
+                splitterMoving: false,
+                splitterThick: 10,
+                splitterPos: 100,
+                splitterType: 'we',
+                splitter: null,
+                childList: null,
+                drawerWidth: 0
+            };
+            _this.setJswStyle('SplitterView');
             _this.setSize(640, 480);
-            _this.JDataSplit.overlay = false;
-            _this.JDataSplit.overlayOpen = true;
-            _this.JDataSplit.overlayMove = 0;
-            _this.JDataSplit.splitterThick = 10;
-            _this.JDataSplit.splitterPos = (splitPos == null ? 100 : splitPos);
-            _this.getNode().dataset.splitterType = (splitType == null ? "we" : splitType);
-            _this.JDataSplit.childList = [new Window(), new Window()];
+            if (splitPos != null)
+                _this.JDataSplit.splitterPos = splitPos;
+            if (splitType != null) {
+                _this.JDataSplit.splitterType = splitType;
+            }
+            var client = _this.getClient();
+            client.dataset.splitterType = _this.JDataSplit.splitterType;
+            _this.JDataSplit.childList = [new JSW.Window(), new JSW.Window()];
             _super.prototype.addChild.call(_this, _this.JDataSplit.childList[0]);
             _super.prototype.addChild.call(_this, _this.JDataSplit.childList[1]);
-            var splitter = new Window();
-            splitter.getNode().dataset.kind = 'Splitter';
+            var icon = document.createElement('div');
+            _this.JDataSplit.menuIcon = icon;
+            icon.dataset.kind = 'SplitterMenu';
+            icon.style.display = 'none';
+            client.appendChild(icon);
+            icon.addEventListener('click', function () {
+                var child0 = _this.JDataSplit.childList[0];
+                _this.JDataSplit.childList[0].addEventListener('visibled', function (e) {
+                    if (e.visible) {
+                        _this.JDataSplit.splitter.setVisible(true);
+                    }
+                });
+                child0.setVisible(true);
+                child0.active(true);
+                icon.style.display = 'none';
+            });
+            var splitter = new JSW.Window();
+            _this.JDataSplit.splitter = splitter;
+            splitter.setJswStyle('Splitter');
             splitter.setOrderTop(true);
+            splitter.setNoActive(true);
             _super.prototype.addChild.call(_this, splitter);
             var that = _this;
-            _this.JDataSplit.childList[0].getNode().addEventListener("mousedown", function () { that.slideTimeout(); });
-            _this.JDataSplit.childList[0].getNode().addEventListener("touchstart", function () { that.slideTimeout(); });
-            _this.JDataSplit.childList[1].getNode().addEventListener("mousedown", function () { that.slideClose(); });
-            _this.JDataSplit.childList[1].getNode().addEventListener("touchstart", function () { that.slideClose(); });
-            splitter.getNode().addEventListener("mousedown", function () { that.slide(); });
-            splitter.getNode().addEventListener("touchstart", function () { that.slide(); });
+            var handle = null;
             splitter.getNode().addEventListener("move", function (e) {
-                if (that.JDataSplit.overlay)
-                    return;
                 var p = e.params;
-                var width = that.getClientWidth();
-                var height = that.getClientHeight();
-                var splitterThick = that.JDataSplit.splitterThick;
-                var x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
-                var y = p.nodePoint.y + p.nowPoint.y - p.basePoint.y;
-                switch (that.getNode().dataset.splitterType) {
-                    case "ns":
-                        that.JDataSplit.splitterPos = y;
-                        break;
-                    case "sn":
-                        that.JDataSplit.splitterPos = height - (y + splitterThick);
-                        break;
-                    case "we":
-                        that.JDataSplit.splitterPos = x;
-                        break;
-                    case "ew":
-                        that.JDataSplit.splitterPos = width - (x + splitterThick);
-                        break;
-                }
-                that.layout();
-            });
-            that.getNode().addEventListener("layout", function () {
                 var width = that.getClientWidth();
                 var height = that.getClientHeight();
                 var JDataSplit = that.JDataSplit;
                 var splitterThick = JDataSplit.splitterThick;
-                var child0 = JDataSplit.childList[0];
-                var child1 = JDataSplit.childList[1];
+                var x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
+                var y = p.nodePoint.y + p.nowPoint.y - p.basePoint.y;
+                switch (that.getClient().dataset.splitterType) {
+                    case "ns":
+                        JDataSplit.splitterPos = y;
+                        break;
+                    case "sn":
+                        JDataSplit.splitterPos = height - (y + splitterThick);
+                        break;
+                    case "we":
+                        JDataSplit.splitterPos = x;
+                        break;
+                    case "ew":
+                        JDataSplit.splitterPos = width - (x + splitterThick);
+                        break;
+                }
+                JDataSplit.splitterMoving = true;
+                if (handle)
+                    clearTimeout(handle);
+                handle = setTimeout(function () { handle = null; JDataSplit.splitterMoving = false; that.layout(); }, 2000);
+                that.layout();
+            });
+            _this.addEventListener("layout", function () {
+                var JDataSplit = that.JDataSplit;
+                var child0 = _this.JDataSplit.childList[0];
+                var child1 = _this.JDataSplit.childList[1];
+                function active(e) {
+                    if (!e.active) {
+                        JDataSplit.splitter.setVisible(false);
+                        child0.setVisible(false);
+                        JDataSplit.menuIcon.style.display = 'block';
+                    }
+                }
+                //動的分割機能の処理
+                if (JDataSplit.drawerMode && !JDataSplit.splitterMoving) {
+                    var type = JDataSplit.splitterType;
+                    var dsize = JDataSplit.drawerWidth + JDataSplit.splitterPos;
+                    var ssize = type === 'ew' || type === 'we' ? _this.getWidth() : _this.getHeight();
+                    if (!JDataSplit.drawerModeNow) {
+                        if (dsize > 0 && ssize < dsize) {
+                            JDataSplit.drawerModeNow = true;
+                            child1.setChildStyle('client');
+                            child0.setOrderTop(true);
+                            _this.JDataSplit.splitter.setVisible(false);
+                            child0.getNode().style.backgroundColor = 'rgba(255,255,255,0.8)';
+                            child0.addEventListener('active', active);
+                            child0.setAnimation('show', JDataSplit.splitterType + 'DrawerShow 0.5s ease 0s normal');
+                            child0.setAnimation('close', JDataSplit.splitterType + 'DrawerClose 0.5s ease 0s normal');
+                            child0.active();
+                            child0.setVisible(false);
+                            _this.JDataSplit.menuIcon.style.display = 'block';
+                        }
+                    }
+                    else {
+                        if (dsize > 0 && ssize >= dsize) {
+                            JDataSplit.drawerModeNow = false;
+                            child0.removeEventListener('active', active);
+                            child1.setChildStyle(null);
+                            child0.setOrderTop(false);
+                            child0.setVisible(true);
+                            _this.JDataSplit.splitter.setVisible(true);
+                            _this.JDataSplit.menuIcon.style.display = 'none';
+                        }
+                    }
+                }
+                var width = that.getClientWidth();
+                var height = that.getClientHeight();
+                var splitterThick = JDataSplit.splitterThick;
                 if (JDataSplit.splitterPos < 0)
                     JDataSplit.splitterPos = 0;
-                switch (that.getNode().dataset.splitterType) {
+                switch (JDataSplit.splitterType) {
                     case "we":
                         if (JDataSplit.splitterPos >= width - splitterThick)
                             JDataSplit.splitterPos = width - splitterThick - 1;
                         splitter.setSize(splitterThick, height);
                         splitter.setPos(JDataSplit.splitterPos, 0);
+                        child0.setPos(0, 0);
                         child0.setSize(splitter.getPosX(), height);
-                        if (JDataSplit.overlay) {
-                            that.movePos(-Math.floor(JDataSplit.splitterPos * JDataSplit.overlayMove), 0);
-                            child0.setPosX(-JDataSplit.splitterPos * JDataSplit.overlayMove);
-                            child1.setPosX(0);
-                            child1.setSize(width, height);
-                        }
-                        else {
-                            child1.setPosX(JDataSplit.splitterPos + splitterThick);
-                            child1.setSize(width - (JDataSplit.splitterPos + splitterThick), height);
-                        }
+                        child1.setPos(JDataSplit.splitterPos + splitterThick, 0);
+                        child1.setSize(width - (JDataSplit.splitterPos + splitterThick), height);
                         break;
                     case "ew":
                         if (JDataSplit.splitterPos >= width - splitterThick)
                             JDataSplit.splitterPos = width - splitterThick - 1;
                         var p = width - JDataSplit.splitterPos - splitterThick;
                         splitter.setSize(splitterThick, height);
-                        if (JDataSplit.overlay) {
-                            that.setPos(p + (width - splitterThick - p) * JDataSplit.overlayMove, 0);
-                            child1.setSize(width, height);
-                            child0.setPosX(p + splitterThick + (width - splitterThick - p) * JDataSplit.overlayMove);
-                            child0.setSize(p + splitterThick, height);
-                        }
-                        else {
-                            splitter.setPos(p, 0);
-                            child1.setSize(p, height);
-                            child0.setPosX(p + splitterThick);
-                            child0.setSize(p + splitterThick, height);
-                        }
+                        splitter.setPos(p, 0);
+                        child1.setPos(0, 0);
+                        child1.setSize(p, height);
+                        child0.setPos(p + splitterThick, 0);
+                        child0.setSize(JDataSplit.splitterPos, height);
                         break;
                     case "ns":
                         if (JDataSplit.splitterPos >= height - splitterThick)
                             JDataSplit.splitterPos = height - splitterThick - 1;
                         splitter.setSize(width, splitterThick);
-                        if (JDataSplit.overlay) {
-                            splitter.setPos(0, JDataSplit.splitterPos - Math.floor(JDataSplit.splitterPos * JDataSplit.overlayMove));
-                            child0.movePos(0, -Math.floor(JDataSplit.splitterPos * JDataSplit.overlayMove));
-                            child0.setSize(width, JDataSplit.splitterPos);
-                            child0.setPosY(0);
-                            child1.setSize(width, height);
-                        }
-                        else {
-                            splitter.setPos(0, JDataSplit.splitterPos);
-                            child0.setSize(width, JDataSplit.splitterPos);
-                            child1.setPosY(JDataSplit.splitterPos + splitterThick);
-                            child1.setSize(width, height - (JDataSplit.splitterPos + splitterThick));
-                        }
+                        splitter.setPos(0, JDataSplit.splitterPos);
+                        child0.setPos(0, 0);
+                        child0.setSize(width, JDataSplit.splitterPos);
+                        child1.setPos(0, JDataSplit.splitterPos + splitterThick);
+                        child1.setSize(width, height - (JDataSplit.splitterPos + splitterThick));
                         break;
                     case "sn":
                         if (JDataSplit.splitterPos >= height - splitterThick)
                             JDataSplit.splitterPos = height - splitterThick - 1;
                         splitter.setSize(width, splitterThick);
                         p = height - JDataSplit.splitterPos - splitterThick;
-                        if (JDataSplit.overlay) {
-                            splitter.setSize(width, splitterThick);
-                            splitter.setPos(0, height - JDataSplit.splitterPos + (JDataSplit.splitterPos - splitterThick) * JDataSplit.overlayMove);
-                            child1.setSize(width, height);
-                            child0.setPosY(height - JDataSplit.splitterPos + splitterThick + (JDataSplit.splitterPos - splitterThick) * JDataSplit.overlayMove);
-                            child0.setSize(width, JDataSplit.splitterPos - splitterThick);
-                        }
-                        else {
-                            splitter.setPos(0, p);
-                            child1.setSize(width, p);
-                            child0.setPosY(p + splitterThick);
-                            child0.setSize(width, p + splitterThick);
-                        }
+                        splitter.setPos(0, p);
+                        child1.setPos(0, 0);
+                        child1.setSize(width, p);
+                        child0.setPos(0, p + splitterThick);
+                        child0.setSize(width, JDataSplit.splitterPos);
                         break;
                 }
             });
@@ -1371,12 +2826,14 @@ var JSW;
          * @memberof Splitter
          */
         Splitter.prototype.setSplitterPos = function (pos, type) {
-            this.JDataSplit.pos = pos;
+            if (pos != null)
+                this.JDataSplit.pos = pos;
             if (type) {
                 this.JDataSplit.type = type;
             }
             this.JDataSplit.splitterPos = this.JDataSplit.pos;
             if (this.JDataSplit.type != null) {
+                this.getClient().dataset.splitterType = this.JDataSplit.type;
                 this.JDataSplit.splitterType = this.JDataSplit.type;
             }
             this.layout();
@@ -1387,17 +2844,10 @@ var JSW;
          * @param {boolean} flag true:有効 false:無効
          * @memberof Splitter
          */
-        Splitter.prototype.setOverlay = function (flag) {
+        Splitter.prototype.setOverlay = function (flag, size) {
             if (flag) {
-                this.JDataSplit.overlay = true;
-                this.JDataSplit.overlayOpen = true;
-                this.JDataSplit.overlayMove = 0;
-                this.slideTimeout();
-            }
-            else {
-                this.JDataSplit.overlay = false;
-                this.JDataSplit.overlayOpen = true;
-                this.JDataSplit.overlayMove = 0;
+                this.JDataSplit.drawerMode = true;
+                this.JDataSplit.drawerWidth = size != null ? size : 0;
             }
             this.layout();
         };
@@ -1411,72 +2861,64 @@ var JSW;
         Splitter.prototype.getChild = function (index) {
             return this.JDataSplit.childList[index];
         };
-        /**
-         *動的バーを閉じる
-         *
-         * @memberof Splitter
-         */
-        Splitter.prototype.slideClose = function () {
-            if (this.JDataSplit.overlayOpen) {
-                this.slide();
-            }
-        };
-        Splitter.prototype.slide = function () {
-            if (!this.JDataSplit.overlay || this.slideHandle)
-                return;
-            this.slideHandle = setInterval(function () {
-                if (this.JData.overlayOpen) {
-                    this.JData.overlayMove += 0.1;
-                    if (this.JData.overlayMove >= 1) {
-                        this.JData.overlayMove = 1;
-                        this.JData.overlayOpen = false;
-                        clearInterval(this.slideHandle);
-                        this.slideHandle = null;
-                    }
-                }
-                else {
-                    this.JData.overlayMove -= 0.1;
-                    if (this.JData.overlayMove < 0) {
-                        this.JData.overlayMove = 0;
-                        this.JData.overlayOpen = true;
-                        clearInterval(this.slideHandle);
-                        this.slideHandle = null;
-                        this.slideTimeout();
-                    }
-                }
-                this.layout();
-            }, 10);
-        };
-        Splitter.prototype.slideTimeout = function (e) {
-            if (e === void 0) { e = null; }
-            if (this.slideTimeoutHandle)
-                clearTimeout(this.slideTimeoutHandle);
-            if (this.JDataSplit.overlay) {
-                this.slideTimeoutHandle = setTimeout(function () {
-                    if (this.JData.overlayOpen) {
-                        this.slide();
-                        this.slideTimeoutHandle = null;
-                    }
-                }, 3000);
-            }
-            if (e)
-                e.preventDefault();
-        };
         return Splitter;
-    }(Window));
+    }(JSW.Window));
     JSW.Splitter = Splitter;
-    var Panel = /** @class */ (function (_super) {
-        __extends(Panel, _super);
-        function Panel() {
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+var JSW;
+(function (JSW) {
+    var TextBox = /** @class */ (function (_super) {
+        __extends(TextBox, _super);
+        function TextBox(params) {
             var _this = _super.call(this) || this;
-            _this.setHeight(32);
+            _this.setJswStyle('TextBox');
+            _this.setAutoSize(true);
             var node = _this.getClient();
-            node.dataset.kind = 'Panel';
+            var img = document.createElement('img');
+            if (params && params.image)
+                img.src = params.image;
+            node.appendChild(img);
+            var textArea = document.createElement('div');
+            node.appendChild(textArea);
+            var nodeLabel = document.createElement('div');
+            textArea.appendChild(nodeLabel);
+            if (params && params.label)
+                nodeLabel.textContent = params.label;
+            var nodeText = document.createElement('input');
+            if (params && params.type)
+                nodeText.type = params.type;
+            textArea.appendChild(nodeText);
+            _this.nodeText = nodeText;
+            if (params && params.text)
+                _this.setText(params.text);
             return _this;
         }
-        return Panel;
-    }(Window));
-    JSW.Panel = Panel;
+        TextBox.prototype.setText = function (text) {
+            var nodeText = this.nodeText;
+            nodeText.value = text;
+        };
+        TextBox.prototype.getText = function () {
+            return this.nodeText.value;
+        };
+        TextBox.prototype.setLabel = function (text) {
+            var node = this.nodeLabel;
+            node.textContent = text;
+        };
+        TextBox.prototype.getLabel = function () {
+            return this.nodeLabel.textContent;
+        };
+        TextBox.prototype.getTextNode = function () {
+            return this.nodeText;
+        };
+        return TextBox;
+    }(JSW.Window));
+    JSW.TextBox = TextBox;
+})(JSW || (JSW = {}));
+/// <reference path="./Window.ts" />
+//
+var JSW;
+(function (JSW) {
     /**
      *
      *
@@ -1762,7 +3204,8 @@ var JSW;
          */
         TreeItem.prototype.selectItem = function (scroll) {
             var treeView = this.getTreeView();
-            treeView.selectItem(this, scroll);
+            if (treeView)
+                treeView.selectItem(this, scroll);
         };
         /**
          *所属先のTreeViewを返す
@@ -1772,7 +3215,7 @@ var JSW;
          */
         TreeItem.prototype.getTreeView = function () {
             var node = this.hNode;
-            while (node && node.dataset.kind !== 'TreeView')
+            while (node && node.dataset.jswStyle !== 'TreeView')
                 node = node.parentElement;
             if (node)
                 return node.treeView;
@@ -1797,7 +3240,7 @@ var JSW;
         function TreeView(params) {
             var _this = _super.call(this, params) || this;
             var client = _this.getClient();
-            client.dataset.kind = 'TreeView';
+            client.dataset.jswStyle = 'TreeView';
             client.treeView = _this;
             var item = new TreeItem('root', true);
             _this.mRootItem = item;
@@ -1904,629 +3347,32 @@ var JSW;
                 return null;
             return this.mSelectItem.getItemValue();
         };
-        TreeView.prototype.addEventListener = function (type, callback, options) {
-            _super.prototype.addEventListener.call(this, type, callback, options);
+        /**
+         *アイテムツリーが展開されら発生する
+         *
+         * @param {'itemOpen'} type
+         * @param {(event:TREEVIEW_EVENT_OPEN)=>void} callback
+         * @memberof TreeView
+         */
+        /**
+         *アイテムが選択されたら発生
+         *
+         * @param {'itemSelect'} type
+         * @param {(event:TREEVIEW_EVENT_SELECT)=>void} callback
+         * @memberof TreeView
+         */
+        /**
+         *アイテムにドラッグドロップされたら発生
+         *
+         * @param {'itemDrop'} type
+         * @param {(event: TREEVIEW_EVENT_DROP) => void} callback
+         * @memberof TreeView
+         */
+        TreeView.prototype.addEventListener = function (type, listener) {
+            _super.prototype.addEventListener.call(this, type, listener);
         };
         return TreeView;
-    }(Window));
+    }(JSW.Window));
     JSW.TreeView = TreeView;
-    /**
-     *ListView用クラス
-    *
-    * @export
-    * @class ListView
-    * @extends {Window}
-    */
-    var ListView = /** @class */ (function (_super) {
-        __extends(ListView, _super);
-        /**
-         *Creates an instance of ListView.
-         * @param {*} [params] ウインドウ作成パラメータ
-         * @memberof ListView
-         */
-        function ListView(params) {
-            var _this = _super.call(this, params) || this;
-            _this.lastIndex = 0;
-            _this.selectIndexes = [];
-            _this.sortIndex = -1;
-            _this.sortVector = false;
-            _this.columnWidth = [];
-            _this.columnAutoIndex = -1;
-            _this.areaWidth = 0;
-            var that = _this;
-            var client = _this.getClient();
-            client.dataset.kind = 'ListView';
-            var headerBack = document.createElement('div');
-            _this.headerBack = headerBack;
-            headerBack.dataset.kind = 'ListHeaderBack';
-            client.appendChild(headerBack);
-            var headerArea = document.createElement('div');
-            _this.headerArea = headerArea;
-            headerArea.dataset.kind = 'ListHeaderArea';
-            client.appendChild(headerArea);
-            var resizers = document.createElement('div');
-            _this.resizers = resizers;
-            resizers.dataset.kind = 'ListResizers';
-            headerArea.appendChild(resizers);
-            var headers = document.createElement('div');
-            _this.headers = headers;
-            headers.dataset.kind = 'ListHeaders';
-            headerArea.appendChild(headers);
-            var itemArea = document.createElement('div');
-            itemArea.dataset.kind = 'ListItemArea';
-            _this.itemArea = itemArea;
-            client.appendChild(itemArea);
-            client.addEventListener('scroll', function () {
-                itemArea.style.left = this.scrollLeft + 'px';
-                if (itemArea.childElementCount) {
-                    var column = itemArea.childNodes[0];
-                    column.style.marginLeft = -this.scrollLeft + 'px';
-                    headerBack.style.marginLeft = this.scrollLeft + 'px';
-                }
-            });
-            client.addEventListener('dragover', function () {
-                event.preventDefault();
-            });
-            client.addEventListener('drop', function (e) {
-                that.callEvent('itemDrop', { itemIndex: -1, subItemIndex: -1, event: e });
-                event.preventDefault();
-            });
-            return _this;
-        }
-        /**
-         *カラムのサイズを設定
-         *
-         * @param {number} index
-         * @param {number} size
-         * @memberof ListView
-         */
-        ListView.prototype.setColumnWidth = function (index, size) {
-            this.columnWidth[index] = size;
-            this.headers.children[index].style.width = size + 'px';
-            this.resize();
-        };
-        /**
-         *カラムのスタイルを設定
-         *
-         * @param {number} col カラム番号
-         * @param {('left'|'right'|'center')} style スタイル
-         * @memberof ListView
-         */
-        ListView.prototype.setColumnStyle = function (col, style) {
-            var columns = this.itemArea.childNodes;
-            var column = columns[col];
-            column.style.justifyContent = style;
-        };
-        /**
-         *カラムのスタイルを複数設定
-         *
-         * @param {(('left' | 'right' | 'center')[])} styles スタイル
-         * @memberof ListView
-         */
-        ListView.prototype.setColumnStyles = function (styles) {
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, l = styles.length; i < l; i++) {
-                var column = columns[i];
-                column.vector = styles[i];
-            }
-        };
-        /**
-         *ヘッダを追加
-         *配列にすると複数追加でき、さらに配列を含めるとサイズが指定できる
-         * @param {(string|(string|[string,number])[])} labels ラベル | [ラベル,ラベル,・・・] | [[ラベル,幅],[ラベル,幅],・・・]
-         * @param {number} [size] 幅
-         * @memberof ListView
-         */
-        ListView.prototype.addHeader = function (label, size) {
-            var headers = this.headers;
-            var labels = [];
-            if (label instanceof Array)
-                labels = label;
-            else
-                labels = [label];
-            var _loop_1 = function (i, l) {
-                var label_1 = labels[i];
-                var text = void 0;
-                var width = size;
-                if (label_1 instanceof Array) {
-                    text = label_1[0];
-                    width = label_1[1];
-                }
-                else {
-                    text = label_1;
-                }
-                index = headers.childElementCount;
-                header = document.createElement('div');
-                headers.appendChild(header);
-                header.textContent = text;
-                if (width != null) {
-                    this_1.columnWidth[index] = width;
-                    header.style.width = width + 'px';
-                }
-                else {
-                    this_1.columnWidth[index] = header.offsetWidth;
-                }
-                var that = this_1;
-                //ヘッダが押されたらソート処理
-                header.addEventListener('click', function () {
-                    var j;
-                    for (j = 0; j < headers.childElementCount; j++) {
-                        if (headers.childNodes[j] === this)
-                            break;
-                    }
-                    var sort = true;
-                    if (that.sortIndex === j)
-                        sort = !that.sortVector;
-                    that.sortItem(j, sort);
-                });
-                itemArea = this_1.itemArea;
-                column = document.createElement('div');
-                column.dataset.kind = 'ListColumn';
-                this_1.itemArea.appendChild(column);
-                //リサイズバーの設定
-                resizers = this_1.resizers;
-                var resize = document.createElement('div');
-                resize.index = index;
-                resizers.appendChild(resize);
-                Jsw.enableMove(resize);
-                resize.addEventListener("move", function (e) {
-                    var p = e.params;
-                    var x = p.nodePoint.x + p.nowPoint.x - p.basePoint.x;
-                    var h = headers.childNodes[this.index];
-                    var width = x - h.offsetLeft;
-                    h.style.width = width + 'px';
-                    that.columnWidth[this.index] = width;
-                    for (var i_1 = this.index, length_1 = resizers.childElementCount; i_1 < length_1; i_1++) {
-                        var node = headers.children[i_1];
-                        var r = resizers.childNodes[i_1];
-                        r.style.left = node.offsetLeft + node.offsetWidth + 'px';
-                        var column_1 = itemArea.children[i_1];
-                        column_1.style.width = node.clientLeft + node.offsetWidth - column_1.clientLeft + 'px';
-                    }
-                });
-            };
-            var this_1 = this, index, header, itemArea, column, resizers;
-            for (var i = 0, l = labels.length; i < l; i++) {
-                _loop_1(i, l);
-            }
-        };
-        /**
-         *アイテムのソートを行う
-         *
-         * @param {number} [index] カラム番号
-         * @param {boolean} [order] 方向 true:昇順 false:降順
-         * @memberof ListView
-         */
-        ListView.prototype.sortItem = function (index, order) {
-            this.clearSelectItem();
-            if (index != null) {
-                this.sortIndex = index;
-                order = order == null ? true : order;
-                this.sortVector = order;
-                var headers = this.headers;
-                for (var i = 0, length_2 = headers.childElementCount; i < length_2; i++) {
-                    if (index === i)
-                        headers.childNodes[i].dataset.sort = order ? 'asc' : 'desc';
-                    else
-                        headers.childNodes[i].dataset.sort = '';
-                }
-            }
-            index = this.sortIndex;
-            order = this.sortVector;
-            var columns = this.itemArea.childNodes;
-            var column = columns[index];
-            var items = column.childNodes;
-            //ソートリストの作成
-            var sortList = [];
-            for (var i = 0, length_3 = items.length; i < length_3; i++) {
-                sortList.push(i);
-            }
-            sortList.sort(function (a, b) {
-                var v1 = items[a].keyValue != null ? items[a].keyValue : items[a].textContent;
-                var v2 = items[b].keyValue != null ? items[b].keyValue : items[b].textContent;
-                return (v1 > v2 ? 1 : -1) * (order ? 1 : -1);
-            });
-            //ソート処理
-            for (var i = 0, length_4 = columns.length; i < length_4; i++) {
-                var column_2 = columns[i];
-                //子ノードの保存と削除
-                var items_1 = [];
-                while (column_2.childElementCount) {
-                    items_1.push(column_2.childNodes[0]);
-                    column_2.removeChild(column_2.childNodes[0]);
-                }
-                //子ノードの再追加
-                for (var j = 0, length_5 = sortList.length; j < length_5; j++) {
-                    column_2.appendChild(items_1[sortList[j]]);
-                }
-            }
-        };
-        /**
-         *アイテムを選択する
-         *すでにある選択は解除される
-         * @param {(number | number[])} index レコード番号
-         * @memberof ListView
-         */
-        ListView.prototype.selectItem = function (index) {
-            this.clearSelectItem();
-            this.addSelectItem(index);
-        };
-        /**
-         *アイテムの選択を全て解除する
-         *
-         * @memberof ListView
-         */
-        ListView.prototype.clearSelectItem = function () {
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_6 = columns.length; i < length_6; i++) {
-                var column = columns[i];
-                for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
-                    column.childNodes[this.selectIndexes[j]].dataset.itemSelect = 'false';
-                }
-            }
-            this.selectIndexes = [];
-        };
-        /**
-         *アイテムの選択を追加する
-         *
-         * @param {(number | number[])} index レコード番号
-         * @memberof ListView
-         */
-        ListView.prototype.addSelectItem = function (index) {
-            var indexes = (index instanceof Array ? index : [index]);
-            Array.prototype.push.apply(this.selectIndexes, indexes);
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_7 = columns.length; i < length_7; i++) {
-                var column = columns[i];
-                for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
-                    column.childNodes[this.selectIndexes[j]].dataset.itemSelect = 'true';
-                }
-            }
-        };
-        /**
-         *アイテムの選択を解除する
-         *
-         * @param {(number | number[])} index レコード番号
-         * @memberof ListView
-         */
-        ListView.prototype.delSelectItem = function (index) {
-            var indexes = (typeof index === 'object' ? index : [index]);
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_8 = columns.length; i < length_8; i++) {
-                var column = columns[i];
-                for (var j = 0, l = indexes.length; j < l; j++) {
-                    column.childNodes[indexes[j]].dataset.itemSelect = 'false';
-                }
-            }
-            var newIndexes = [];
-            for (var j = 0, l = this.selectIndexes.length; j < l; j++) {
-                var index_1 = this.selectIndexes[j];
-                if (indexes.indexOf(index_1) < 0)
-                    newIndexes.push(index_1);
-            }
-            this.selectIndexes = newIndexes;
-        };
-        /**
-         *アイテムが選択されているか返す
-         *
-         * @param {number} index レコード番号
-         * @returns {boolean}
-         * @memberof ListView
-         */
-        ListView.prototype.isSelectItem = function (index) {
-            return this.selectIndexes.indexOf(index) >= 0;
-        };
-        ListView.getIndexOfNode = function (node) {
-            return [].slice.call(node.parentNode.childNodes).indexOf(node);
-        };
-        /**
-         *アイテムを全て削除する
-         *
-         * @memberof ListView
-         */
-        ListView.prototype.clearItem = function () {
-            this.selectIndexes = [];
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_9 = columns.length; i < length_9; i++) {
-                var column = columns[i];
-                while (column.childElementCount)
-                    column.removeChild(column.childNodes[0]);
-            }
-        };
-        /**
-         *対象セルのノードを取得
-         *
-         * @param {number} row
-         * @param {number} col
-         * @returns
-         * @memberof ListView
-         */
-        ListView.prototype.getCell = function (row, col) {
-            var columns = this.itemArea.childNodes;
-            var column = columns[col];
-            if (column == null)
-                return null;
-            return column.childNodes[row];
-        };
-        /**
-         *アイテムに値を設定する
-         *
-         * @param {number} index レコード番号
-         * @param {*} value 値
-         * @memberof ListView
-         */
-        ListView.prototype.setItemValue = function (index, value) {
-            var cell = this.getCell(index, 0);
-            if (cell)
-                cell.value = value;
-        };
-        /**
-         *アイテムの値を取得する
-         *
-         * @param {number} index レコード番号
-         * @returns 値
-         * @memberof ListView
-         */
-        ListView.prototype.getItemValue = function (index) {
-            var cell = this.getCell(index, 0);
-            return cell.value;
-        };
-        /**
-         *最初に選択されているアイテムを返す
-         *
-         * @returns {number}
-         * @memberof ListView
-         */
-        ListView.prototype.getSelectItem = function () {
-            for (var _i = 0, _a = this.selectIndexes; _i < _a.length; _i++) {
-                var index = _a[_i];
-                return index;
-            }
-            return -1;
-        };
-        /**
-         *選択されている値を全て取得する
-         *
-         * @returns {any[]}
-         * @memberof ListView
-         */
-        ListView.prototype.getSelectValues = function () {
-            var values = [];
-            for (var _i = 0, _a = this.selectIndexes; _i < _a.length; _i++) {
-                var index = _a[_i];
-                values.push(this.getItemValue(index));
-            }
-            return values;
-        };
-        /**
-         *指定行のセルノードを返す
-         *
-         * @param {number} row
-         * @returns
-         * @memberof ListView
-         */
-        ListView.prototype.getLineCells = function (row) {
-            var cells = [];
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_10 = columns.length; i < length_10; i++) {
-                var column = columns[i];
-                cells.push(column.childNodes[row]);
-            }
-            return cells;
-        };
-        /**
-         *アイテムを追加する
-         *アイテムはテキストかノードが指定できる
-         *配列を渡した場合は、複数追加となる
-         * @param {(string|(string|HTMLElement)[])} value テキストもしくはノード
-         * @returns
-         * @memberof ListView
-         */
-        ListView.prototype.addItem = function (value) {
-            var vector = { left: 'flex-start', center: 'center', right: 'flex-end' };
-            var that = this;
-            var columns = this.itemArea.childNodes;
-            for (var i = 0, length_11 = columns.length; i < length_11; i++) {
-                var column = columns[i];
-                var cell = document.createElement('div');
-                cell.draggable = true;
-                cell.dataset.kind = 'ListCell';
-                if (column.vector)
-                    cell.style.justifyContent = vector[column.vector];
-                column.appendChild(cell);
-                cell.addEventListener('mouseover', function () {
-                    var index = ListView.getIndexOfNode(this);
-                    for (var i_2 = 0, length_12 = columns.length; i_2 < length_12; i_2++) {
-                        var column_3 = columns[i_2];
-                        if (that.overIndex != null && that.overIndex < column_3.childElementCount) {
-                            column_3.childNodes[that.overIndex].dataset.itemHover = 'false';
-                        }
-                        column_3.childNodes[index].dataset.itemHover = 'true';
-                    }
-                    that.overIndex = index;
-                });
-                cell.addEventListener('dragstart', function (e) {
-                    var index = ListView.getIndexOfNode(this);
-                    var index2 = ListView.getIndexOfNode(this.parentNode);
-                    that.callEvent('itemDragStart', { itemIndex: index, subItemIndex: index2, event: e });
-                });
-                cell.addEventListener('dragleave', function () {
-                    var index = ListView.getIndexOfNode(this);
-                    var cells = that.getLineCells(index);
-                    for (var _i = 0, cells_1 = cells; _i < cells_1.length; _i++) {
-                        var cell_1 = cells_1[_i];
-                        cell_1.dataset.drag = '';
-                    }
-                });
-                cell.addEventListener('dragenter', function () {
-                    var index = ListView.getIndexOfNode(this);
-                    var cells = that.getLineCells(index);
-                    for (var _i = 0, cells_2 = cells; _i < cells_2.length; _i++) {
-                        var cell_2 = cells_2[_i];
-                        cell_2.dataset.drag = 'over';
-                    }
-                    event.preventDefault();
-                });
-                cell.addEventListener('dragover', function () {
-                    event.preventDefault();
-                });
-                cell.addEventListener('drop', function (e) {
-                    var index = ListView.getIndexOfNode(this);
-                    var index2 = ListView.getIndexOfNode(this.parentNode);
-                    var cells = that.getLineCells(index);
-                    for (var _i = 0, cells_3 = cells; _i < cells_3.length; _i++) {
-                        var cell_3 = cells_3[_i];
-                        cell_3.dataset.drag = 'over';
-                    }
-                    that.callEvent('itemDrop', { itemIndex: index, subItemIndex: index2, event: e });
-                    event.preventDefault();
-                });
-                cell.addEventListener('dragstart', function (e) {
-                    var index = ListView.getIndexOfNode(this);
-                    var index2 = ListView.getIndexOfNode(this.parentNode);
-                    that.callEvent('itemDragStart', { itemIndex: index, subItemIndex: index2, event: e });
-                });
-                cell.addEventListener('click', function (e) {
-                    var index = ListView.getIndexOfNode(this);
-                    var index2 = ListView.getIndexOfNode(this.parentNode);
-                    if (e.ctrlKey) {
-                        if (!that.isSelectItem(index))
-                            that.addSelectItem(index);
-                        else
-                            that.delSelectItem(index);
-                    }
-                    else if (e.shiftKey) {
-                        var indexes = [];
-                        var s = Math.min(that.lastIndex, index);
-                        var e_1 = Math.max(that.lastIndex, index);
-                        for (var i_3 = s; i_3 <= e_1; i_3++)
-                            indexes.push(i_3);
-                        that.selectItem(indexes);
-                    }
-                    else
-                        that.selectItem(index);
-                    that.lastIndex = index;
-                    that.callEvent('itemClick', { itemIndex: index, subItemIndex: index2, event: e });
-                });
-                cell.addEventListener('dblclick', function (e) {
-                    var index = ListView.getIndexOfNode(this);
-                    var index2 = ListView.getIndexOfNode(this.parentNode);
-                    that.callEvent('itemDblClick', { itemIndex: index, subItemIndex: index2, event: e });
-                });
-            }
-            if (columns.length === 0)
-                return -1;
-            var index = columns[0].childElementCount - 1;
-            if (value instanceof Array) {
-                for (var i = 0, l = value.length; i < l; i++) {
-                    this.setItem(index, i, value[i]);
-                }
-            }
-            else
-                this.setItem(index, 0, value);
-            if (this.areaWidth !== this.itemArea.clientWidth) {
-                this.areaWidth = this.itemArea.clientWidth;
-                this.resize();
-            }
-            return index;
-        };
-        /**
-         *ソート用のキーを設定する
-         *
-         * @param {number} row レコード番号
-         * @param {number} column カラム番号
-         * @param {*} value キー
-         * @returns
-         * @memberof ListView
-         */
-        ListView.prototype.setSortKey = function (row, column, value) {
-            var c = this.itemArea.childNodes[column];
-            if (c == null)
-                return false;
-            var r = c.childNodes[row];
-            if (r == null)
-                return false;
-            r.keyValue = value;
-            return true;
-        };
-        /**
-         *ソート用のキーをまとめて設定する
-         *
-         * @param {number} row レコード番号
-         * @param {any[]} values キー配列
-         * @memberof ListView
-         */
-        ListView.prototype.setSortKeys = function (row, values) {
-            for (var i = 0, l = values.length; i < l; i++) {
-                var c = this.itemArea.childNodes[i];
-                if (c == null)
-                    break;
-                var r = c.childNodes[row];
-                if (r == null)
-                    break;
-                r.keyValue = values[i];
-            }
-        };
-        /**
-         *アイテムを書き換える
-         *
-         * @param {number} row レコード番号
-         * @param {number} column カラム番号
-         * @param {(string|HTMLElement)} value テキストもしくはノード
-         * @returns
-         * @memberof ListView
-         */
-        ListView.prototype.setItem = function (row, column, value) {
-            var c = this.itemArea.childNodes[column];
-            if (c == null)
-                return false;
-            var r = c.childNodes[row];
-            if (r == null)
-                return false;
-            if (!(value instanceof HTMLElement)) {
-                var item = document.createElement('div');
-                item.textContent = value;
-                r.appendChild(item);
-            }
-            else {
-                r.appendChild(value);
-            }
-        };
-        /**
-         *ヘッダに合わせてカラムサイズを調整する
-         *基本的には直接呼び出さない
-         * @memberof ListView
-         */
-        ListView.prototype.resize = function () {
-            var headers = this.headers;
-            var resizers = this.resizers;
-            var itemArea = this.itemArea;
-            var lmitWidth = itemArea.clientWidth;
-            for (var i = 0, length_13 = headers.childElementCount; i < length_13; i++) {
-                lmitWidth -= this.columnWidth[i];
-            }
-            var autoIndex = this.columnAutoIndex;
-            for (var i = 0, length_14 = headers.childElementCount; i < length_14; i++) {
-                var node = headers.childNodes[i];
-                var resize = resizers.childNodes[i];
-                var column = itemArea.children[i];
-                var width = this.columnWidth[i];
-                if (autoIndex === i || (autoIndex === -1 && i === length_14 - 1))
-                    width += lmitWidth;
-                node.style.width = width + 'px';
-                resize.style.left = node.offsetLeft + width - resize.offsetWidth / 2 + 'px';
-                column.style.width = width + 'px';
-            }
-        };
-        ListView.prototype.onLayout = function (flag) {
-            _super.prototype.onLayout.call(this, flag);
-            this.resize();
-        };
-        ListView.prototype.addEventListener = function (type, callback, options) {
-            _super.prototype.addEventListener.call(this, type, callback, options);
-        };
-        return ListView;
-    }(Window));
-    JSW.ListView = ListView;
 })(JSW || (JSW = {}));
 //# sourceMappingURL=jsw.js.map

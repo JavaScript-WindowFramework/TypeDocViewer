@@ -11,6 +11,7 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+///<reference path="../js/jsw.d.ts"/>
 /**
  *ボタン表示用
  *
@@ -95,10 +96,9 @@ var SearchWindow = /** @class */ (function (_super) {
         _this.addHeader('検索結果');
         if (docData == null)
             return _this;
-        var that = _this;
         _this.addEventListener('itemClick', function (e) {
-            var index = e.params.itemIndex;
-            var item = that.getItemValue(index);
+            var index = e.itemIndex;
+            var item = _this.getItemValue(index);
             item.selectItem(true);
         });
         var keys = keywords.toLowerCase().split(' ');
@@ -236,8 +236,7 @@ var TypeDocView = /** @class */ (function (_super) {
         return null;
     };
     TypeDocView.prototype.onTreeItem = function (e) {
-        var p = e.params;
-        var item = p.item;
+        var item = e.item;
         var listView = this.mListView;
         var value = item.getItemValue();
         listView.clearItem();

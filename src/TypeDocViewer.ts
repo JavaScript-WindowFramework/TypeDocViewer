@@ -1,6 +1,6 @@
 
-
-namespace TYPEDOC{
+///<reference path="../js/jsw.d.ts"/>
+namespace TYPEDOC {
 	/**
 	 *TypeDocのJSON処理用
 	*
@@ -8,99 +8,99 @@ namespace TYPEDOC{
 	* @interface TypeDoc
 	*/
 	export interface TypeDoc {
-	id: number;
-	name: string;
-	kind: number;
-	kindString: string;
-	flags: Flags;
-	originalName?: string;
-	children: TypeDoc[];
-	groups: Group[];
-	sources?: Source[];
-	comment?: Comment;
-	extendedTypes?: Type[];
-	signatures?: Signature[];
-	overwrites?: Type;
-	type?: Type;
-	inheritedFrom?: Type;
-	defaultValue?: string;
+		id: number;
+		name: string;
+		kind: number;
+		kindString: string;
+		flags: Flags;
+		originalName?: string;
+		children: TypeDoc[];
+		groups: Group[];
+		sources?: Source[];
+		comment?: Comment;
+		extendedTypes?: Type[];
+		signatures?: Signature[];
+		overwrites?: Type;
+		type?: Type;
+		inheritedFrom?: Type;
+		defaultValue?: string;
 	}
 	interface ElementType {
-	type: string;
-	name?: string;
-	types?: Type[];
+		type: string;
+		name?: string;
+		types?: Type[];
 	}
 
 	interface Signature {
-	id: number;
-	name: string;
-	kind: number;
-	kindString: string;
-	flags: Flags;
-	type: Type;
-	comment?: Comment;
-	parameters?: Parameter[];
-	overwrites?: Type;
-	inheritedFrom?: Type;
+		id: number;
+		name: string;
+		kind: number;
+		kindString: string;
+		flags: Flags;
+		type: Type;
+		comment?: Comment;
+		parameters?: Parameter[];
+		overwrites?: Type;
+		inheritedFrom?: Type;
 	}
 	interface Parameter {
-	id: number;
-	name: string;
-	kind: number;
-	kindString: string;
-	flags: Flags;
-	type: Type;
-	comment?: Comment;
+		id: number;
+		name: string;
+		kind: number;
+		kindString: string;
+		flags: Flags;
+		type: Type;
+		comment?: Comment;
 	}
 	interface Group {
-	title: string;
-	kind: number;
-	children: number[];
+		title: string;
+		kind: number;
+		children: number[];
 	}
 
 	interface Type {
-	type: string;
-	name?: string;
-	id?: number;
-	types?: Type[];
-	value?: string;
-	declaration?: Declaration;
-	elementType?: ElementType;
+		type: string;
+		name?: string;
+		id?: number;
+		types?: Type[];
+		value?: string;
+		declaration?: Declaration;
+		elementType?: ElementType;
 	}
 	interface Comment {
-	text?: string
-	shortText: string;
-	tags?: Tag[];
-	returns?: string;
+		text?: string
+		shortText: string;
+		tags?: Tag[];
+		returns?: string;
 	}
 
 	interface Declaration {
-	id: number;
-	name: string;
-	kind: number;
-	kindString: string;
-	flags: Flags;
-	signatures: Signature[];
-	sources: Source[];
+		id: number;
+		name: string;
+		kind: number;
+		kindString: string;
+		flags: Flags;
+		signatures: Signature[];
+		sources: Source[];
 	}
 
 	interface Source {
-	fileName: string;
-	line: number;
-	character: number;
+		fileName: string;
+		line: number;
+		character: number;
 	}
 
 
 
 	interface Flags {
-	isOptional?: boolean;
+		isOptional?: boolean;
 		isStatic?: boolean;
 		isExported?: boolean;
 	}
 
 	interface Tag {
-	tag: string;
-	text: string;
+		tag: string;
+		text: string;
 	}
 
 }
@@ -180,58 +180,57 @@ class TextBox extends JSW.Window {
  * @class SearchWindow
  * @extends {JSW.ListView}
  */
-class SearchWindow extends JSW.ListView{
-	constructor(treeView : JSW.TreeView,docData:TYPEDOC.TypeDoc,keywords : string){
-		super({frame:true})
-		this.setSize(600,500)
+class SearchWindow extends JSW.ListView {
+	constructor(treeView: JSW.TreeView, docData: TYPEDOC.TypeDoc, keywords: string) {
+		super({ frame: true })
+		this.setSize(600, 500)
 		this.setTitle('Search')
 		this.addHeader('検索結果')
-		if(docData == null)
+		if (docData == null)
 			return
 
-		let that = this
-		this.addEventListener('itemClick',function(e){
-			let index = e.params.itemIndex
-			let item = that.getItemValue(index) as JSW.TreeItem
+		this.addEventListener('itemClick', e=> {
+			let index = e.itemIndex
+			let item = this.getItemValue(index) as JSW.TreeItem
 			item.selectItem(true)
 		})
 
 		let keys = keywords.toLowerCase().split(' ')
-		this.findItems(treeView.getRootItem(),keys)
+		this.findItems(treeView.getRootItem(), keys)
 
 	}
-	findItems(item:JSW.TreeItem,keys){
-		let doc : TYPEDOC.TypeDoc = item.getItemValue()
+	findItems(item: JSW.TreeItem, keys) {
+		let doc: TYPEDOC.TypeDoc = item.getItemValue()
 		let word = doc.name;
-		if(doc.signatures && doc.signatures[0]){
+		if (doc.signatures && doc.signatures[0]) {
 			let signature = doc.signatures[0]
-			if(signature.parameters){
-				for(let p of doc.signatures[0].parameters){
-					word += ' '+p.name
+			if (signature.parameters) {
+				for (let p of doc.signatures[0].parameters) {
+					word += ' ' + p.name
 				}
 			}
-			if(signature.comment && signature.comment.shortText){
-				word += ' '+signature.comment.shortText
+			if (signature.comment && signature.comment.shortText) {
+				word += ' ' + signature.comment.shortText
 			}
 		}
 
-		if(SearchWindow.findKeys(word.toLowerCase(),keys)){
+		if (SearchWindow.findKeys(word.toLowerCase(), keys)) {
 			let i = item
 			let label = i.getItemText()
-			while(i = i.getParentItem()){
+			while (i = i.getParentItem()) {
 				label += ' - ' + i.getItemText()
 			}
 
 			let index = this.addItem(label)
-			this.setItemValue(index,item)
+			this.setItemValue(index, item)
 		}
-		for(let i=0,l=item.getChildCount();i<l;i++){
-			this.findItems(item.getChildItem(i),keys)
+		for (let i = 0, l = item.getChildCount(); i < l; i++) {
+			this.findItems(item.getChildItem(i), keys)
 		}
 	}
-	static findKeys(value:string,keys:string[]){
-		for(let key of keys){
-			if(value.indexOf(key) === -1)
+	static findKeys(value: string, keys: string[]) {
+		for (let key of keys) {
+			if (value.indexOf(key) === -1)
 				return false
 		}
 		return true
@@ -243,12 +242,12 @@ class SearchWindow extends JSW.ListView{
  * @class TypeDocView
  * @extends {JSW.FrameWindow}
  */
-class TypeDocView extends JSW.Window{
-	mTreeView : JSW.TreeView
-	mListView : JSW.ListView
-	mDocData : TYPEDOC.TypeDoc
-	constructor(param?){
-		function onSearch(){
+class TypeDocView extends JSW.Window {
+	mTreeView: JSW.TreeView
+	mListView: JSW.ListView
+	mDocData: TYPEDOC.TypeDoc
+	constructor(param?) {
+		function onSearch() {
 			const search = new SearchWindow(that.mTreeView, that.mDocData, textBox.getText())
 			that.addChild(search)
 			search.setPos()
@@ -256,37 +255,37 @@ class TypeDocView extends JSW.Window{
 		super(param)
 		const that = this
 		this.setTitle('TypeDoc Viewer')
-		this.setSize(800,600)
+		this.setSize(800, 600)
 
 		const panel = new JSW.Panel()
-		this.addChild(panel,'top')
+		this.addChild(panel, 'top')
 		const searchButton = new Button('Search')
-		panel.addChild(searchButton,'left')
-		searchButton.addEventListener('click',function(e){
+		panel.addChild(searchButton, 'left')
+		searchButton.addEventListener('click', function (e) {
 			onSearch()
 		})
 		const textBox = new TextBox()
-		textBox.setMargin(1,1,1,1)
+		textBox.setMargin(1, 1, 1, 1)
 		textBox.getTextNode().style.backgroundColor = '#dddddd'
-		panel.addChild(textBox,'client')
-		textBox.addEventListener('enter',function(e){
+		panel.addChild(textBox, 'client')
+		textBox.addEventListener('enter', function (e) {
 			onSearch()
 		})
 
 		const splitter = new JSW.Splitter()
-		this.addChild(splitter,'client')
+		this.addChild(splitter, 'client')
 		splitter.setSplitterPos(200)
 
 		const treeView = new JSW.TreeView()
 		this.mTreeView = treeView
-		splitter.addChild(0,treeView,'client')
-		treeView.addEventListener('itemSelect',this.onTreeItem.bind(this))
+		splitter.addChild(0, treeView, 'client')
+		treeView.addEventListener('itemSelect', this.onTreeItem.bind(this))
 
 		const listView = new JSW.ListView()
 		this.mListView = listView
 		splitter.addChild(1, listView, 'client')
 
-		listView.addHeader([['項目',100],['値',800]])
+		listView.addHeader([['項目', 100], ['値', 800]])
 		this.setPos()
 	}
 
@@ -304,29 +303,29 @@ class TypeDocView extends JSW.Window{
 		xmlHttp.open('GET', url, true)
 		xmlHttp.send()
 	}
-	load(value:TYPEDOC.TypeDoc){
+	load(value: TYPEDOC.TypeDoc) {
 		this.mDocData = value
-		TypeDocView.createTree(this.mTreeView.getRootItem(),value)
+		TypeDocView.createTree(this.mTreeView.getRootItem(), value)
 	}
-	static createTree(item:JSW.TreeItem,value : TYPEDOC.TypeDoc){
+	static createTree(item: JSW.TreeItem, value: TYPEDOC.TypeDoc) {
 		item.setItemText(value.name)
 		item.setItemValue(value)
 
 		const fromName = this.getInheritedFrom(value)
-		if(fromName){
+		if (fromName) {
 			item.getBody().style.color = '#888822'
 		}
 
 
-		if(value.children){
+		if (value.children) {
 			const children = [].concat(value.children)
-			children.sort(function(a,b){
-				if(a.kindString !== b.kindString)
-					return a.kindString<b.kindString?-1:1
-				return a.name.toLowerCase()<b.name.toLowerCase()?-1:1
+			children.sort(function (a, b) {
+				if (a.kindString !== b.kindString)
+					return a.kindString < b.kindString ? -1 : 1
+				return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1
 			})
-			for(let i in children){
-				if(!children[i].flags.isPrivate){
+			for (let i in children) {
+				if (!children[i].flags.isPrivate) {
 					let childItem = item.addItem()
 					TypeDocView.createTree(childItem, children[i])
 				}
@@ -334,47 +333,46 @@ class TypeDocView extends JSW.Window{
 			}
 		}
 	}
-	static getInheritedFrom(value:TYPEDOC.TypeDoc){
-		if(value.inheritedFrom){
+	static getInheritedFrom(value: TYPEDOC.TypeDoc) {
+		if (value.inheritedFrom) {
 			return value.inheritedFrom.name
 		}
 		return null
 	}
 
-	onTreeItem(e: JSW.TREEVIEW_EVENT_SELECT){
-		const p = e.params
-		const item = p.item
+	onTreeItem(e: JSW.TREEVIEW_EVENT_SELECT) {
+		const item = e.item
 		const listView = this.mListView
 		const value = item.getItemValue() as TYPEDOC.TypeDoc
 
 		listView.clearItem()
-		if (value.kindString){
-			listView.addItem(['種別',value.kindString])
+		if (value.kindString) {
+			listView.addItem(['種別', value.kindString])
 		}
-		if (value.defaultValue){
-			listView.addItem(['初期値',value.defaultValue])
+		if (value.defaultValue) {
+			listView.addItem(['初期値', value.defaultValue])
 		}
-		if (value.signatures && value.signatures.length){
+		if (value.signatures && value.signatures.length) {
 			const signature = value.signatures[0]
-			if (signature.comment){
-				if(signature.comment.shortText)
+			if (signature.comment) {
+				if (signature.comment.shortText)
 					listView.addItem(['説明', signature.comment.shortText])
-				if (signature.comment.returns){
-					const type = (signature.type && signature.type.name) ? signature.type.name:''
-					listView.addItem(['戻り値', '{' + type + '} '+signature.comment.returns])
+				if (signature.comment.returns) {
+					const type = (signature.type && signature.type.name) ? signature.type.name : ''
+					listView.addItem(['戻り値', '{' + type + '} ' + signature.comment.returns])
 				}
 			}
-			if(signature.inheritedFrom){
+			if (signature.inheritedFrom) {
 				listView.addItem(['継承', signature.inheritedFrom.name])
 			}
-			if (signature.parameters){
+			if (signature.parameters) {
 				const params = signature.parameters
-				for(let i in params){
+				for (let i in params) {
 					const param = params[i]
-					const comment = (param.comment && param.comment.text) ? param.comment.text:''
+					const comment = (param.comment && param.comment.text) ? param.comment.text : ''
 					const type = (param.name && param.type.name) ? param.type.name : ''
 
-					listView.addItem(["["+param.name+"]",'{'+type+'} '+ comment])
+					listView.addItem(["[" + param.name + "]", '{' + type + '} ' + comment])
 				}
 			}
 		}
