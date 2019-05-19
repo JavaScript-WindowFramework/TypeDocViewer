@@ -106,34 +106,6 @@ export namespace TYPEDOC {
 	}
 
 }
-/**
- *ボタン表示用
- *
- * @class Button
- * @extends {JWF.Window}
- */
-class Button extends JWF.Window {
-	nodeText: HTMLElement
-	constructor(text?: string) {
-		super()
-		this.setMargin(1, 1, 1, 1)
-		this.setAutoSize(true)
-		let node = this.getClient()
-		node.dataset.kind = 'JButton'
-
-		let nodeText = document.createElement('span')
-		nodeText.style.whiteSpace = 'nowrap'
-		node.appendChild(nodeText)
-		this.nodeText = nodeText
-		if (text)
-			this.setText(text)
-	}
-	setText(text: string) {
-		let nodeText = this.nodeText
-		nodeText.textContent = text
-		this.layout()
-	}
-}
 
 /**
  *検索用
@@ -223,9 +195,9 @@ export class TypeDocView extends JWF.Window {
 
 		const panel = new JWF.Panel()
 		this.addChild(panel, 'top')
-		const searchButton = new Button('Search')
+		const searchButton = new JWF.Button('Search')
 		panel.addChild(searchButton, 'left')
-		searchButton.addEventListener('click', function (e) {
+		searchButton.addEventListener('buttonClick', function (e) {
 			onSearch()
 		})
 		const textBox = new JWF.TextBox()
