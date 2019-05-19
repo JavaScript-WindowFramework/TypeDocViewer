@@ -1,6 +1,7 @@
+import * as JWF from 'javascript-window-framework'
 
-///<reference path="../js/jsw.d.ts"/>
-namespace TYPEDOC {
+
+export namespace TYPEDOC {
 	/**
 	 *TypeDocのJSON処理用
 	*
@@ -96,6 +97,7 @@ namespace TYPEDOC {
 		isOptional?: boolean;
 		isStatic?: boolean;
 		isExported?: boolean;
+		isPrivate?: boolean;
 	}
 
 	interface Tag {
@@ -108,9 +110,9 @@ namespace TYPEDOC {
  *ボタン表示用
  *
  * @class Button
- * @extends {JSW.Window}
+ * @extends {JWF.Window}
  */
-class Button extends JSW.Window {
+class Button extends JWF.Window {
 	nodeText: HTMLElement
 	constructor(text?: string) {
 		super()
@@ -132,56 +134,15 @@ class Button extends JSW.Window {
 		this.layout()
 	}
 }
-/**
- *テキストボックス
- *
- * @class TextBox
- * @extends {JSW.Window}
- */
-class TextBox extends JSW.Window {
-	nodeText: HTMLInputElement
-	constructor(text?: string) {
-		super()
-		const that = this
-		let node = this.getClient()
 
-		let nodeText = document.createElement('input')
-		nodeText.style.width = '100%'
-		nodeText.style.height = '100%'
-		node.appendChild(nodeText)
-		this.nodeText = nodeText
-		nodeText.addEventListener('keydown', function (e) {
-			if (e.keyCode == 13)
-				that.callEvent('enter', e)
-		})
-
-		//デフォルトの高さをinputタグに合わせる
-		let size = nodeText.getBoundingClientRect()
-		this.setSize(300, size.top + size.bottom + 1)
-
-		if (text)
-			this.setText(text)
-
-	}
-	setText(text: string) {
-		let nodeText = this.nodeText
-		nodeText.value = text
-	}
-	getText() {
-		return this.nodeText.value
-	}
-	getTextNode() {
-		return this.nodeText
-	}
-}
 /**
  *検索用
  *
  * @class SearchWindow
- * @extends {JSW.ListView}
+ * @extends {JWF.ListView}
  */
-class SearchWindow extends JSW.ListView {
-	constructor(treeView: JSW.TreeView, docData: TYPEDOC.TypeDoc, keywords: string) {
+class SearchWindow extends JWF.ListView {
+	constructor(treeView: JWF.TreeView, docData: TYPEDOC.TypeDoc, keywords: string) {
 		super({ frame: true })
 		this.setSize(600, 500)
 		this.setTitle('Search')
@@ -191,7 +152,7 @@ class SearchWindow extends JSW.ListView {
 
 		this.addEventListener('itemClick', e=> {
 			let index = e.itemIndex
-			let item = this.getItemValue(index) as JSW.TreeItem
+			let item = this.getItemValue(index) as JWF.TreeItem
 			item.selectItem(true)
 		})
 
@@ -199,12 +160,12 @@ class SearchWindow extends JSW.ListView {
 		this.findItems(treeView.getRootItem(), keys)
 
 	}
-	findItems(item: JSW.TreeItem, keys) {
+	findItems(item: JWF.TreeItem, keys:string[]) {
 		let doc: TYPEDOC.TypeDoc = item.getItemValue()
 		let word = doc.name;
 		if (doc.signatures && doc.signatures[0]) {
 			let signature = doc.signatures[0]
-			if (signature.parameters) {
+			if (signature.parameters && doc.signatures[0].parameters) {
 				for (let p of doc.signatures[0].parameters) {
 					word += ' ' + p.name
 				}
@@ -215,7 +176,7 @@ class SearchWindow extends JSW.ListView {
 		}
 
 		if (SearchWindow.findKeys(word.toLowerCase(), keys)) {
-			let i = item
+			let i:JWF.TreeItem|null = item
 			let label = i.getItemText()
 			while (i = i.getParentItem()) {
 				label += ' - ' + i.getItemText()
@@ -240,31 +201,34 @@ class SearchWindow extends JSW.ListView {
  *TypeDocViewerのメインウインドウ
  *
  * @class TypeDocView
- * @extends {JSW.FrameWindow}
+ * @extends {JWF.FrameWindow}
  */
-class TypeDocView extends JSW.Window {
-	mTreeView: JSW.TreeView
-	mListView: JSW.ListView
-	mDocData: TYPEDOC.TypeDoc
-	constructor(param?) {
-		function onSearch() {
-			const search = new SearchWindow(that.mTreeView, that.mDocData, textBox.getText())
-			that.addChild(search)
-			search.setPos()
+export class TypeDocView extends JWF.Window {
+	mTreeView: JWF.TreeView
+	mListView: JWF.ListView
+	mDocData: TYPEDOC.TypeDoc|null
+	constructor(param?: JWF.WINDOW_PARAMS) {
+		const onSearch = ()=>{
+			if (this.mDocData){
+				const search = new SearchWindow(this.mTreeView, this.mDocData, textBox.getText())
+				this.addChild(search)
+				search.setPos()
+			}
 		}
+
 		super(param)
-		const that = this
+		this.mDocData = null
 		this.setTitle('TypeDoc Viewer')
 		this.setSize(800, 600)
 
-		const panel = new JSW.Panel()
+		const panel = new JWF.Panel()
 		this.addChild(panel, 'top')
 		const searchButton = new Button('Search')
 		panel.addChild(searchButton, 'left')
 		searchButton.addEventListener('click', function (e) {
 			onSearch()
 		})
-		const textBox = new TextBox()
+		const textBox = new JWF.TextBox()
 		textBox.setMargin(1, 1, 1, 1)
 		textBox.getTextNode().style.backgroundColor = '#dddddd'
 		panel.addChild(textBox, 'client')
@@ -272,16 +236,16 @@ class TypeDocView extends JSW.Window {
 			onSearch()
 		})
 
-		const splitter = new JSW.Splitter()
+		const splitter = new JWF.Splitter()
 		this.addChild(splitter, 'client')
 		splitter.setSplitterPos(200)
 
-		const treeView = new JSW.TreeView()
+		const treeView = new JWF.TreeView()
 		this.mTreeView = treeView
 		splitter.addChild(0, treeView, 'client')
 		treeView.addEventListener('itemSelect', this.onTreeItem.bind(this))
 
-		const listView = new JSW.ListView()
+		const listView = new JWF.ListView()
 		this.mListView = listView
 		splitter.addChild(1, listView, 'client')
 
@@ -289,7 +253,7 @@ class TypeDocView extends JSW.Window {
 		this.setPos()
 	}
 
-	loadUrl(url) {
+	loadUrl(url:string) {
 		const that = this
 		//Ajaxによるデータ要求処理
 		let xmlHttp = new XMLHttpRequest()
@@ -307,7 +271,7 @@ class TypeDocView extends JSW.Window {
 		this.mDocData = value
 		TypeDocView.createTree(this.mTreeView.getRootItem(), value)
 	}
-	static createTree(item: JSW.TreeItem, value: TYPEDOC.TypeDoc) {
+	static createTree(item: JWF.TreeItem, value: TYPEDOC.TypeDoc) {
 		item.setItemText(value.name)
 		item.setItemValue(value)
 
@@ -318,7 +282,7 @@ class TypeDocView extends JSW.Window {
 
 
 		if (value.children) {
-			const children = [].concat(value.children)
+			const children = ([] as TYPEDOC.TypeDoc[]).concat(value.children)
 			children.sort(function (a, b) {
 				if (a.kindString !== b.kindString)
 					return a.kindString < b.kindString ? -1 : 1
@@ -340,7 +304,7 @@ class TypeDocView extends JSW.Window {
 		return null
 	}
 
-	onTreeItem(e: JSW.TREEVIEW_EVENT_SELECT) {
+	onTreeItem(e: JWF.TREEVIEW_EVENT_SELECT) {
 		const item = e.item
 		const listView = this.mListView
 		const value = item.getItemValue() as TYPEDOC.TypeDoc
@@ -352,17 +316,20 @@ class TypeDocView extends JSW.Window {
 		if (value.defaultValue) {
 			listView.addItem(['初期値', value.defaultValue])
 		}
-		if (value.signatures && value.signatures.length) {
-			const signature = value.signatures[0]
-			if (signature.comment) {
-				if (signature.comment.shortText)
-					listView.addItem(['説明', signature.comment.shortText])
-				if (signature.comment.returns) {
-					const type = (signature.type && signature.type.name) ? signature.type.name : ''
-					listView.addItem(['戻り値', '{' + type + '} ' + signature.comment.returns])
-				}
+		let comment = value.comment
+		let signature = value.signatures && value.signatures[0]?value.signatures[0]:null
+		if (!comment && signature)
+			comment = signature.comment
+		if (comment) {
+			if (comment.shortText)
+				listView.addItem(['説明', comment.shortText])
+			if (comment.returns && signature) {
+				const type = (signature.type && signature.type.name) ? signature.type.name : ''
+				listView.addItem(['戻り値', '{' + type + '} ' + comment.returns])
 			}
-			if (signature.inheritedFrom) {
+		}
+		if (signature){
+			if (signature.inheritedFrom && signature.inheritedFrom.name) {
 				listView.addItem(['継承', signature.inheritedFrom.name])
 			}
 			if (signature.parameters) {
@@ -376,5 +343,7 @@ class TypeDocView extends JSW.Window {
 				}
 			}
 		}
+
+
 	}
 }

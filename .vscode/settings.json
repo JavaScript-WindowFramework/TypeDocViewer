@@ -1,0 +1,11 @@
+{
+	"workbench.editor.enablePreview": false,
+	"breadcrumbs.symbolSortOrder": "type",
+	"easysass.formats": [
+		{
+			"format": "expanded",
+			"extension": ".css"
+		}
+	],
+	"easysass.targetDir": "./dist/css",
+}
