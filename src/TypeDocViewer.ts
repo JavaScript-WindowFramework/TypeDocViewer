@@ -242,6 +242,7 @@ export class TypeDocView extends JWF.Window {
 	load(value: TYPEDOC.TypeDoc) {
 		this.mDocData = value
 		TypeDocView.createTree(this.mTreeView.getRootItem(), value)
+		document.title = `${value.name} document`
 	}
 	static createTree(item: JWF.TreeItem, value: TYPEDOC.TypeDoc) {
 		item.setItemText(value.name)
